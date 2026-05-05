@@ -109,6 +109,7 @@ ln -sf ../init.d/auto-share-init files/etc/rc.d/S98auto-share-init
 
 # ---------- 克隆打印包（增加重试） ----------
 echo "克隆打印包..."
+mkdir -p package
 rm -rf package/printing-packages
 git clone --depth=1 https://github.com/master-0123/openwrt-printing-packages package/printing-packages || \
 git clone --depth=1 https://github.com/master-0123/openwrt-printing-packages package/printing-packages
