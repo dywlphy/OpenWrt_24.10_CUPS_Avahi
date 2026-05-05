@@ -5,7 +5,9 @@
 # ==========================================
 
 # 🔴 物理移除冲突包
+rm -rf package/network/services/dnsmasq
 rm -rf package/feeds/packages/odhcpd-ipv6only
+find feeds -path "*/odhcpd-ipv6only*" -exec rm -rf {} \; 2>/dev/null
 echo "✅ 冲突包已移除"
 
 # 创建自启动目录
