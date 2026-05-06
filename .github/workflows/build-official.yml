@@ -65,9 +65,15 @@ jobs:
         for idx in feeds/*.index; do
           [ -f "$idx" ] && sed -i '/odhcpd-ipv6only/d' "$idx" || true
         done
-        # 4. 清理 tmp 缓存（防止 make 读到旧快照）
+        # 4. 删掉有依赖问题的 onionshare-cli（我们不需要它）
+        rm -rf feeds/packages/net/onionshare-cli 2>/dev/null || true
+        find . -name "onionshare-cli" -type d -exec rm -rf {} \; 2>/dev/null || true
+        for idx in feeds/*.index; do
+          [ -f "$idx" ] && sed -i '/onionshare-cli/d' "$idx" || true
+        done
+        # 5. 清理 tmp 缓存
         rm -rf tmp/
-        echo "✅ odhcpd-ipv6only 已彻底清除"
+        echo "✅ 冲突包已彻底清除（odhcpd-ipv6only + onionshare-cli）"
 
     - name: Download packages
       run: cd openwrt && make download -j8 || make download -j1 V=s
