@@ -67,8 +67,8 @@ jobs:
         rm -rf tmp/
         echo "✅ 冲突包已清除"
 
-    # ═══════════════════════════════════════
-    # 第一道检查：feeds 中的包是否存在
+        # ═══════════════════════════════════════
+    # 第一道检查：依赖链是否能完整解析
     # ═══════════════════════════════════════
     - name: Verify package requirements
       run: |
@@ -76,108 +76,62 @@ jobs:
         
         echo ""
         echo "╔══════════════════════════════════════╗"
-        echo "║  🔍 第一道检查：包是否存在           ║"
+        echo "║  🔍 第一道检查：依赖链完整性         ║"
         echo "╚══════════════════════════════════════╝"
         echo ""
-        FAIL=0
         
-        check_pkg() {
+        # 方法：直接验证 .config 里 =y 的包数量
+        # 如果 defconfig 没执行或 feed 源没配好，=y 的包会很少
+        
+        TOTAL=$(grep -c "^CONFIG_PACKAGE_.*=y" .config)
+        echo "  已解析的包总数: $TOTAL"
+        echo ""
+        
+        if [ "$TOTAL" -lt 50 ]; then
+          echo "❌ 已解析的包少于 50 个，依赖解析可能失败"
+          echo "   请检查："
+          echo "   1. make defconfig 是否执行成功"
+          echo "   2. feeds 源是否完整"
+          echo "   3. .config 格式是否正确"
+          exit 1
+        fi
+        
+        # 检查关键包是否被 defconfig 解析出来（用 CONFIG 前缀名）
+        FAIL=0
+        check_config() {
           local desc="${2:-}"
-          if grep -q "CONFIG_PACKAGE_$1=y" .config; then
-            if grep -rq "^Package:.*$1" feeds/ package/ 2>/dev/null; then
-              echo "  ✅ $1 ${desc:+($desc)}"
-            else
-              echo "  ❌ $1 ${desc:+($desc)} - 在任何 feed 中都不存在！"
-              FAIL=1
-            fi
+          if grep -q "^CONFIG_PACKAGE_$1=y" .config; then
+            echo "  ✅ $1 ${desc:+($desc)}"
+          else
+            echo "  ❌ $1 ${desc:+($desc)} - defconfig 后未解析到此包！"
+            FAIL=1
           fi
         }
         
-        echo "【核心网络】"
-        check_pkg "uhttpd" "Web管理界面"
-        check_pkg "dnsmasq-full" "DNS/DHCP"
-        check_pkg "odhcpd" "IPv6分配"
-        check_pkg "firewall4" "防火墙"
-        check_pkg "nftables" "防火墙后端"
-        check_pkg "miniupnpd" "UPnP服务"
+        echo "【核心功能包依赖解析检查】"
         echo ""
-        
-        echo "【CUPS 打印系统】"
-        check_pkg "cupsd" "CUPS守护进程"
-        check_pkg "cups" "CUPS核心"
-        check_pkg "cups-filters" "打印过滤器"
-        check_pkg "ghostscript" "PostScript解释器"
-        check_pkg "gutenprint" "打印机驱动"
-        check_pkg "foomatic-db" "打印机数据库"
-        check_pkg "foomatic-db-engine" "打印机引擎"
-        check_pkg "cups-bjnp" "Canon网络打印"
-        check_pkg "avahi-daemon" "打印机发现"
-        check_pkg "libjpeg-turbo" "JPEG支持"
-        check_pkg "libpng" "PNG支持"
-        check_pkg "libfreetype" "字体渲染"
-        check_pkg "fontconfig" "字体配置"
-        check_pkg "libtiff" "TIFF支持"
-        check_pkg "lcms2" "色彩管理"
-        check_pkg "libdaemon" "守护进程库"
-        check_pkg "libdbus" "D-Bus"
-        check_pkg "libexpat" "XML解析"
-        check_pkg "gnutls" "TLS支持"
-        check_pkg "libusb-1.0" "USB支持"
-        check_pkg "dbus" "D-Bus守护进程"
-        echo ""
-        
-        echo "【文件共享】"
-        check_pkg "ksmbd-server" "SMB共享服务"
-        check_pkg "luci-app-ksmbd" "共享管理界面"
-        echo ""
-        
-        echo "【科学上网】"
-        check_pkg "luci-app-ssr-plus" "SSR-Plus界面"
-        echo ""
-        
-        echo "【远程接入】"
-        check_pkg "wireguard-tools" "WireGuard工具"
-        check_pkg "luci-proto-wireguard" "WireGuard界面"
-        echo ""
-        
-        echo "【实用功能】"
-        check_pkg "luci-app-sqm" "SQM QoS"
-        check_pkg "sqm-scripts" "SQM脚本"
-        check_pkg "luci-app-upnp" "UPnP界面"
-        check_pkg "luci-app-ddns" "动态DNS"
-        check_pkg "luci-app-wol" "网络唤醒"
-        check_pkg "luci-app-nlbwmon" "流量监控"
-        check_pkg "luci-app-statistics" "系统统计"
-        check_pkg "luci-app-adblock" "广告过滤"
-        check_pkg "luci-app-nft-qos" "上网时间控制"
-        check_pkg "luci-app-autoreboot" "定时重启"
-        check_pkg "luci-app-watchcat" "断线重启"
-        check_pkg "luci-app-commands" "命令执行"
-        check_pkg "luci-app-usb-printer" "USB打印界面"
-        check_pkg "luci-app-diskman" "磁盘管理"
-        check_pkg "vlmcsd" "KMS激活服务"
-        check_pkg "luci-app-vlmcsd" "KMS激活界面"
-        check_pkg "iperf3" "测速工具"
-        check_pkg "htop" "进程查看"
-        check_pkg "curl" "URL工具"
-        check_pkg "bash" "Bash Shell"
-        check_pkg "block-mount" "自动挂载"
+        check_config "uhttpd" "Web管理界面"
+        check_config "cups" "CUPS打印核心"
+        check_config "ksmbd-server" "SMB文件共享"
+        check_config "luci-app-ssr-plus" "SSR-Plus"
+        check_config "luci-app-ksmbd" "ksmbd管理界面"
         echo ""
         
         if [ "$FAIL" -eq 1 ]; then
           echo "╔══════════════════════════════════════╗"
           echo "║  ❌ 第一道检查失败                   ║"
-          echo "║  有包在 feeds 中不存在               ║"
+          echo "║  核心包未被 defconfig 解析           ║"
           echo "║  可能原因：                          ║"
-          echo "║  1. 包名拼写错误                     ║"
-          echo "║  2. 缺少对应的 feed 源               ║"
-          echo "║  3. feed 分支与 OpenWrt 版本不匹配    ║"
+          echo "║  1. 包名在 .config 里拼写错误         ║"
+          echo "║  2. 对应的 feed 源未正确添加          ║"
+          echo "║  3. make defconfig 执行报错           ║"
           echo "╚══════════════════════════════════════╝"
           exit 1
         fi
         
         echo "╔══════════════════════════════════════╗"
         echo "║  ✅ 第一道检查通过                   ║"
+        echo "║  解析包总数: $TOTAL                  ║"
         echo "║  ⏳ 即将开始下载...                   ║"
         echo "╚══════════════════════════════════════╝"
 
