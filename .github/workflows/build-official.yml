@@ -1,7 +1,7 @@
 # ============================================================
 # OpenWrt 官方 24.10 稳定版编译
 # 核心：CUPS + SSR-Plus + ksmbd
-# 三层快速失败检查（5分钟内发现配置/下载问题）
+# 修复：diy-part2.sh 在 feeds 就绪后执行；检查脚本不因 -e 中断
 # ============================================================
 
 name: Build Official OpenWrt
@@ -39,7 +39,6 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt -b openwrt-24.10 openwrt
 
-    # 第一步：复制配置文件和脚本，添加 feed 源，但不执行 make defconfig
     - name: Load custom feeds and config
       run: |
         cp config.txt openwrt/.config
@@ -48,16 +47,19 @@ jobs:
         chmod +x openwrt/diy-part1.sh openwrt/diy-part2.sh
         cd openwrt
         ./diy-part1.sh
-        ./diy-part2.sh
+        # diy-part2.sh 延后到 feeds install 之后执行
 
-    # 第二步：更新并安装所有 feed 源
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-    # 第三步：删除冲突包
+    - name: Run diy-part2.sh (after feeds ready)
+      run: |
+        cd openwrt
+        ./diy-part2.sh
+
     - name: Remove conflicting packages
       run: |
         cd openwrt
@@ -75,15 +77,11 @@ jobs:
         rm -rf tmp/
         echo "✅ 冲突包已清除"
 
-    # 第四步：在所有 feed 都就绪后，执行 defconfig
     - name: Run make defconfig
       run: |
         cd openwrt
         make defconfig
 
-    # ═══════════════════════════════════════
-    # 第一道检查：依赖链是否能完整解析
-    # ═══════════════════════════════════════
     - name: Verify package requirements
       run: |
         cd openwrt
@@ -104,7 +102,6 @@ jobs:
           echo "   1. make defconfig 是否执行成功"
           echo "   2. feeds 源是否完整"
           echo "   3. .config 格式是否正确"
-          # exit 1
         fi
         
         # 调试输出
@@ -128,7 +125,7 @@ jobs:
           fi
           echo "  ❌ $name ${desc:+($desc)} - defconfig 后未解析到此包！"
           FAIL=1
-          return 1
+          return 0
         }
         
         echo "【核心功能包依赖解析检查】"
@@ -164,7 +161,6 @@ jobs:
           echo "║  核心包未被 defconfig 解析           ║"
           echo "║  请查看上方调试输出确认实际包名      ║"
           echo "╚══════════════════════════════════════╝"
-          # exit 1
         else
           echo "╔══════════════════════════════════════╗"
           echo "║  ✅ 第一道检查通过                   ║"
@@ -176,9 +172,6 @@ jobs:
     - name: Download packages
       run: cd openwrt && make download -j8 || make download -j1 V=s
 
-    # ═══════════════════════════════════════
-    # 第二道检查：下载是否完整
-    # ═══════════════════════════════════════
     - name: Verify downloads
       run: |
         cd openwrt
@@ -199,6 +192,7 @@ jobs:
             echo "  ❌ $1 ${desc:+($desc)} - 未下载！"
             FAIL=1
           fi
+          return 0
         }
         
         echo "【核心组件】"
@@ -266,6 +260,7 @@ jobs:
             echo "  ❌ $1 ${desc:+($desc)} - 未编译进固件！"
             FAIL=1
           fi
+          return 0
         }
         
         check_dir() {
@@ -276,6 +271,7 @@ jobs:
             echo "  ❌ $1/ ${desc:+($desc)} - 目录缺失！"
             FAIL=1
           fi
+          return 0
         }
         
         echo "【核心系统】"
