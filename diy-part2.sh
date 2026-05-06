@@ -1,15 +1,16 @@
 #!/bin/bash
 
 # ==========================================
-# 自启动脚本 + 自动共享（完全使用 OpenWrt 官方源）
+# 自启动脚本 + 自动共享 + 冲突包清理 + 小功能安装
 # ==========================================
 
-# 🔴 物理移除冲突包
+# 🔴 物理移除冲突包（全覆盖）
 rm -rf package/network/services/dnsmasq
 rm -rf package/feeds/packages/odhcpd-ipv6only
 rm -rf package/network/services/odhcpd/files/odhcpd-ipv6only
 find package -path "*/odhcpd-ipv6only*" -exec rm -rf {} \; 2>/dev/null
 find feeds -path "*/odhcpd-ipv6only*" -exec rm -rf {} \; 2>/dev/null
+find feeds -path "*/odhcpd/ipv6only*" -exec rm -rf {} \; 2>/dev/null
 echo "✅ 冲突包已移除（dnsmasq + odhcpd-ipv6only）"
 
 # 实用小功能
@@ -27,6 +28,7 @@ echo "✅ 冲突包已移除（dnsmasq + odhcpd-ipv6only）"
 ./scripts/feeds install kmod-wireguard
 ./scripts/feeds install wireguard-tools
 ./scripts/feeds install luci-proto-wireguard
+echo "✅ 实用小功能安装完成"
 
 # 创建自启动目录
 mkdir -p files/etc/init.d files/etc/rc.d
@@ -131,4 +133,4 @@ EOF
 chmod +x files/etc/init.d/auto-share-init
 ln -sf ../init.d/auto-share-init files/etc/rc.d/S98auto-share-init
 
-echo "✅ diy-part2.sh 执行完成（所有包均使用 OpenWrt 官方源）"
+echo "✅ diy-part2.sh 执行完成"
