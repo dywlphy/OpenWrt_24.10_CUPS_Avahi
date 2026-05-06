@@ -258,6 +258,95 @@ jobs:
         cd openwrt
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j8 || make -j1 V=s
+        
+        # ═══════════════════════════════════════
+        # 第三道检查：编译产物是否真的进了固件
+        # ═══════════════════════════════════════
+        echo ""
+        echo "╔══════════════════════════════════════╗"
+        echo "║  🔍 第三道检查：固件内容验证         ║"
+        echo "╚══════════════════════════════════════╝"
+        echo ""
+        FAIL=0
+        FW="build_dir/target-x86_64_musl/root-x86"
+        
+        check_bin() {
+          local desc="${2:-}"
+          if [ -f "$FW/$1" ]; then
+            echo "  ✅ $1 ${desc:+($desc)}"
+          else
+            echo "  ❌ $1 ${desc:+($desc)} - 未编译进固件！"
+            FAIL=1
+          fi
+        }
+        
+        check_dir() {
+          local desc="${2:-}"
+          if [ -d "$FW/$1" ]; then
+            echo "  ✅ $1/ ${desc:+($desc)}"
+          else
+            echo "  ❌ $1/ ${desc:+($desc)} - 目录缺失！"
+            FAIL=1
+          fi
+        }
+        
+        echo "【核心系统】"
+        check_bin "usr/sbin/uhttpd" "Web管理界面"
+        check_bin "usr/sbin/dropbear" "SSH服务"
+        check_bin "usr/sbin/dnsmasq" "DNS/DHCP"
+        check_bin "usr/sbin/odhcpd" "IPv6分配"
+        check_bin "usr/sbin/netifd" "网络管理"
+        echo ""
+        
+        echo "【CUPS 打印系统】"
+        check_bin "usr/sbin/cupsd" "CUPS守护进程"
+        check_bin "usr/lib/cups/filter/gstoraster" "Ghostscript滤镜"
+        check_bin "usr/lib/cups/filter/foomatic-rip" "Foomatic引擎"
+        check_dir "usr/share/cups" "CUPS数据目录"
+        check_dir "usr/share/gutenprint" "Gutenprint驱动"
+        check_dir "etc/avahi" "Avahi配置"
+        echo ""
+        
+        echo "【文件共享】"
+        check_bin "usr/sbin/ksmbd.mountd" "ksmbd共享服务"
+        check_dir "etc/ksmbd" "ksmbd配置"
+        echo ""
+        
+        echo "【远程接入】"
+        check_bin "usr/bin/wg" "WireGuard工具"
+        echo ""
+        
+        echo "【LuCI 界面模块】"
+        check_dir "usr/lib/lua/luci/controller" "LuCI控制器"
+        check_dir "usr/lib/lua/luci/view" "LuCI视图"
+        check_dir "www/luci-static" "LuCI静态资源"
+        echo ""
+        
+        echo "【实用工具】"
+        check_bin "usr/bin/curl" "URL工具"
+        check_bin "usr/bin/bash" "Bash Shell"
+        check_bin "usr/bin/htop" "进程查看器"
+        check_bin "usr/bin/iperf3" "测速工具"
+        check_bin "usr/sbin/vlmcsd" "KMS激活服务"
+        echo ""
+        
+        if [ "$FAIL" -eq 1 ]; then
+          echo "╔══════════════════════════════════════╗"
+          echo "║  ❌ 第三道检查失败                   ║"
+          echo "║  核心文件未编译进固件                ║"
+          echo "║  可能原因：                          ║"
+          echo "║  1. make defconfig 未执行            ║"
+          echo "║  2. 依赖链断裂导致包被跳过           ║"
+          echo "║  3. 编译错误导致个别包失败           ║"
+          echo "╚══════════════════════════════════════╝"
+          exit 1
+        fi
+        
+        echo "╔══════════════════════════════════════╗"
+        echo "║  ✅ 第三道检查通过                   ║"
+        echo "║  所有核心文件已编入固件              ║"
+        echo "╚══════════════════════════════════════╝"
+        
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
