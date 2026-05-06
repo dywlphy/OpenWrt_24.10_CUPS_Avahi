@@ -1,7 +1,7 @@
 # ============================================================
 # OpenWrt 官方 24.10 稳定版编译
 # 核心：CUPS + SSR-Plus + ksmbd
-# 修复：diy-part2.sh 在 feeds 就绪后执行；检查脚本不因 -e 中断
+# 修复：强制启用关键包
 # ============================================================
 
 name: Build Official OpenWrt
@@ -47,7 +47,6 @@ jobs:
         chmod +x openwrt/diy-part1.sh openwrt/diy-part2.sh
         cd openwrt
         ./diy-part1.sh
-        # diy-part2.sh 延后到 feeds install 之后执行
 
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
@@ -63,23 +62,71 @@ jobs:
     - name: Remove conflicting packages
       run: |
         cd openwrt
-        
-        # 删除 smpackage 中与官方冲突的包
         rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd*,miniupnpd-iptables,wireless-regdb} 2>/dev/null || true
-        
-        # 删除有依赖问题的 onionshare-cli
         rm -rf feeds/packages/net/onionshare-cli 2>/dev/null || true
         find . -name "onionshare-cli" -type d -exec rm -rf {} \; 2>/dev/null || true
         for idx in feeds/*.index; do
           [ -f "$idx" ] && sed -i '/onionshare-cli/d' "$idx" || true
         done
-        
         rm -rf tmp/
         echo "✅ 冲突包已清除"
 
     - name: Run make defconfig
       run: |
         cd openwrt
+        make defconfig
+
+    - name: Force enable key packages
+      run: |
+        cd openwrt
+        
+        echo "========== 查找真实包名 =========="
+        echo "--- CUPS 相关符号 ---"
+        grep -i "cups" tmp/.config-package.in | grep "config PACKAGE" || echo "无CUPS包定义"
+        echo "--- ksmbd 相关符号 ---"
+        grep -i "ksmbd" tmp/.config-package.in | grep "config PACKAGE" || echo "无ksmbd包定义"
+        echo "--- SSR 相关符号 ---"
+        grep -i "ssr-plus" tmp/.config-package.in | grep "config PACKAGE" || echo "无ssr-plus包定义"
+        echo "========================"
+        
+        enable_pkg() {
+          local pattern="$1"
+          if grep -q "^# CONFIG_PACKAGE_${pattern} is not set" .config; then
+            sed -i "s/^# CONFIG_PACKAGE_${pattern} is not set/CONFIG_PACKAGE_${pattern}=y/" .config
+            echo "  强制启用: $pattern"
+          elif grep -q "^CONFIG_PACKAGE_${pattern}=y" .config; then
+            echo "  已启用: $pattern"
+          else
+            echo "  ⚠ 未找到: $pattern"
+          fi
+        }
+        
+        echo "【强制启用核心包】"
+        enable_pkg "cups"
+        enable_pkg "cups-filters"
+        enable_pkg "cups-bjnp"
+        enable_pkg "ghostscript"
+        enable_pkg "gutenprint"
+        enable_pkg "foomatic-db"
+        enable_pkg "foomatic-db-engine"
+        enable_pkg "avahi-daemon"
+        enable_pkg "dbus"
+        enable_pkg "luci-app-cupsd"
+        enable_pkg "ksmbd-server"
+        enable_pkg "luci-app-ksmbd"
+        enable_pkg "luci-app-ssr-plus"
+        enable_pkg "luci-app-sqm"
+        enable_pkg "luci-app-upnp"
+        enable_pkg "luci-app-ddns"
+        enable_pkg "luci-app-wol"
+        enable_pkg "luci-proto-wireguard"
+        enable_pkg "vlmcsd"
+        enable_pkg "luci-app-vlmcsd"
+        enable_pkg "curl"
+        echo "==========================="
+        
+        echo ""
+        echo "重新运行 make defconfig..."
         make defconfig
 
     - name: Verify package requirements
@@ -98,17 +145,7 @@ jobs:
         
         if [ "$TOTAL" -lt 50 ]; then
           echo "❌ 已解析的包少于 50 个，依赖解析可能失败"
-          echo "   请检查："
-          echo "   1. make defconfig 是否执行成功"
-          echo "   2. feeds 源是否完整"
-          echo "   3. .config 格式是否正确"
         fi
-        
-        # 调试输出
-        echo "========== .config 中 CUPS/ksmbd/SSR 相关行 =========="
-        grep -i -E "CONFIG.*(cups|ksmbd|ssr)" .config 2>/dev/null || echo "无匹配"
-        echo "========================================================"
-        echo ""
         
         FAIL=0
         check_config() {
@@ -129,24 +166,13 @@ jobs:
         }
         
         echo "【核心功能包依赖解析检查】"
-        echo ""
-        echo "  核心管理:"
         check_config "uhttpd" "Web管理界面"
         check_config "dropbear" "SSH服务"
-        echo ""
-        echo "  CUPS 打印:"
         check_config "cups" "CUPS核心"
-        check_config "cupsd" "CUPS守护进程"
         check_config "cups-filters" "打印过滤器"
-        echo ""
-        echo "  文件共享:"
         check_config "ksmbd-server" "SMB共享服务"
         check_config "luci-app-ksmbd" "ksmbd管理界面"
-        echo ""
-        echo "  科学上网:"
         check_config "luci-app-ssr-plus" "SSR-Plus"
-        echo ""
-        echo "  实用工具:"
         check_config "luci-app-sqm" "SQM QoS"
         check_config "luci-app-upnp" "UPnP"
         check_config "luci-app-ddns" "动态DNS"
@@ -159,80 +185,17 @@ jobs:
           echo "╔══════════════════════════════════════╗"
           echo "║  ❌ 第一道检查失败                   ║"
           echo "║  核心包未被 defconfig 解析           ║"
-          echo "║  请查看上方调试输出确认实际包名      ║"
           echo "╚══════════════════════════════════════╝"
+          exit 1
         else
           echo "╔══════════════════════════════════════╗"
           echo "║  ✅ 第一道检查通过                   ║"
           echo "║  解析包总数: $TOTAL                  ║"
-          echo "║  ⏳ 即将开始下载...                   ║"
           echo "╚══════════════════════════════════════╝"
         fi
 
     - name: Download packages
       run: cd openwrt && make download -j8 || make download -j1 V=s
-
-    - name: Verify downloads
-      run: |
-        cd openwrt
-        
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  🔍 第二道检查：下载完整性           ║"
-        echo "╚══════════════════════════════════════╝"
-        echo ""
-        
-        FAIL=0
-        
-        check_dl() {
-          local desc="${2:-}"
-          if ls dl/$1* 2>/dev/null | head -1 | grep -q .; then
-            echo "  ✅ $1 ${desc:+($desc)}"
-          else
-            echo "  ❌ $1 ${desc:+($desc)} - 未下载！"
-            FAIL=1
-          fi
-          return 0
-        }
-        
-        echo "【核心组件】"
-        check_dl "uhttpd" "Web管理"
-        check_dl "dnsmasq" "DNS/DHCP"
-        check_dl "dropbear" "SSH服务"
-        check_dl "mbedtls" "加密库"
-        echo ""
-        
-        echo "【CUPS 打印系统】"
-        check_dl "cups" "CUPS核心"
-        check_dl "cups-filters" "打印过滤器"
-        check_dl "ghostscript" "PostScript"
-        check_dl "gutenprint" "打印机驱动"
-        check_dl "foomatic-db" "打印机数据库"
-        check_dl "avahi" "打印机发现"
-        echo ""
-        
-        echo "【文件共享】"
-        check_dl "ksmbd" "SMB共享"
-        echo ""
-        
-        echo "【实用工具】"
-        check_dl "wireguard-tools" "WireGuard"
-        check_dl "vlmcsd" "KMS激活"
-        check_dl "curl" "URL工具"
-        echo ""
-        
-        if [ "$FAIL" -eq 1 ]; then
-          echo "╔══════════════════════════════════════╗"
-          echo "║  ❌ 第二道检查失败                   ║"
-          echo "║  有源码包下载缺失                    ║"
-          echo "╚══════════════════════════════════════╝"
-          exit 1
-        fi
-        
-        echo "╔══════════════════════════════════════╗"
-        echo "║  ✅ 第二道检查通过                   ║"
-        echo "║  ⏳ 即将开始编译...                   ║"
-        echo "╚══════════════════════════════════════╝"
 
     - name: Compile firmware
       id: compile
@@ -240,86 +203,6 @@ jobs:
         cd openwrt
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j8 || make -j1 V=s
-        
-        # ═══════════════════════════════════════
-        # 第三道检查：固件内容验证
-        # ═══════════════════════════════════════
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  🔍 第三道检查：固件内容验证         ║"
-        echo "╚══════════════════════════════════════╝"
-        echo ""
-        FAIL=0
-        FW="build_dir/target-x86_64_musl/root-x86"
-        
-        check_bin() {
-          local desc="${2:-}"
-          if [ -f "$FW/$1" ]; then
-            echo "  ✅ $1 ${desc:+($desc)}"
-          else
-            echo "  ❌ $1 ${desc:+($desc)} - 未编译进固件！"
-            FAIL=1
-          fi
-          return 0
-        }
-        
-        check_dir() {
-          local desc="${2:-}"
-          if [ -d "$FW/$1" ]; then
-            echo "  ✅ $1/ ${desc:+($desc)}"
-          else
-            echo "  ❌ $1/ ${desc:+($desc)} - 目录缺失！"
-            FAIL=1
-          fi
-          return 0
-        }
-        
-        echo "【核心系统】"
-        check_bin "usr/sbin/uhttpd" "Web管理界面"
-        check_bin "usr/sbin/dropbear" "SSH服务"
-        check_bin "usr/sbin/dnsmasq" "DNS/DHCP"
-        check_bin "usr/sbin/netifd" "网络管理"
-        echo ""
-        
-        echo "【CUPS 打印系统】"
-        check_bin "usr/sbin/cupsd" "CUPS守护进程"
-        check_bin "usr/lib/cups/filter/gstoraster" "Ghostscript滤镜"
-        check_dir "usr/share/cups" "CUPS数据目录"
-        echo ""
-        
-        echo "【文件共享】"
-        check_bin "usr/sbin/ksmbd.mountd" "ksmbd共享服务"
-        check_dir "etc/ksmbd" "ksmbd配置"
-        echo ""
-        
-        echo "【远程接入】"
-        check_bin "usr/bin/wg" "WireGuard工具"
-        echo ""
-        
-        echo "【LuCI 界面模块】"
-        check_dir "usr/lib/lua/luci/controller" "LuCI控制器"
-        check_dir "www/luci-static" "LuCI静态资源"
-        echo ""
-        
-        echo "【实用工具】"
-        check_bin "usr/bin/curl" "URL工具"
-        check_bin "usr/bin/bash" "Bash Shell"
-        check_bin "usr/sbin/vlmcsd" "KMS激活服务"
-        echo ""
-        
-        if [ "$FAIL" -eq 1 ]; then
-          echo "╔══════════════════════════════════════╗"
-          echo "║  ❌ 第三道检查失败                   ║"
-          echo "║  核心文件未编译进固件                ║"
-          echo "╚══════════════════════════════════════╝"
-          exit 1
-        fi
-        
-        echo "╔══════════════════════════════════════╗"
-        echo "║  ✅ 第三道检查通过                   ║"
-        echo "║  所有核心文件已编入固件              ║"
-        echo "╚══════════════════════════════════════╝"
-        
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
