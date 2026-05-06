@@ -57,23 +57,14 @@ jobs:
     - name: Remove conflicting packages
       run: |
         cd openwrt
-        # 1. 物理删目录
-        find . -maxdepth 4 -name "odhcpd-ipv6only" -type d -exec rm -rf {} \; 2>/dev/null || true
-        # 2. 删可能存在的链接/残留文件
-        find . -name "*odhcpd-ipv6only*" -delete 2>/dev/null || true
-        # 3. 从 feeds 索引里彻底剔除
-        for idx in feeds/*.index; do
-          [ -f "$idx" ] && sed -i '/odhcpd-ipv6only/d' "$idx" || true
-        done
-        # 4. 删掉有依赖问题的 onionshare-cli（我们不需要它）
+        # 删掉有依赖问题的 onionshare-cli（我们不需要它）
         rm -rf feeds/packages/net/onionshare-cli 2>/dev/null || true
         find . -name "onionshare-cli" -type d -exec rm -rf {} \; 2>/dev/null || true
         for idx in feeds/*.index; do
           [ -f "$idx" ] && sed -i '/onionshare-cli/d' "$idx" || true
         done
-        # 5. 清理 tmp 缓存
         rm -rf tmp/
-        echo "✅ 冲突包已彻底清除（odhcpd-ipv6only + onionshare-cli）"
+        echo "✅ 冲突包已清除"
 
     - name: Download packages
       run: cd openwrt && make download -j8 || make download -j1 V=s
