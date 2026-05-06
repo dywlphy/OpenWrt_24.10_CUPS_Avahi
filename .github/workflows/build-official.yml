@@ -80,15 +80,6 @@ jobs:
       run: |
         cd openwrt
         
-        echo "========== 查找真实包名 =========="
-        echo "--- CUPS 相关符号 ---"
-        grep -i "cups" tmp/.config-package.in | grep "config PACKAGE" || echo "无CUPS包定义"
-        echo "--- ksmbd 相关符号 ---"
-        grep -i "ksmbd" tmp/.config-package.in | grep "config PACKAGE" || echo "无ksmbd包定义"
-        echo "--- SSR 相关符号 ---"
-        grep -i "ssr-plus" tmp/.config-package.in | grep "config PACKAGE" || echo "无ssr-plus包定义"
-        echo "========================"
-        
         enable_pkg() {
           local pattern="$1"
           if grep -q "^# CONFIG_PACKAGE_${pattern} is not set" .config; then
@@ -97,7 +88,8 @@ jobs:
           elif grep -q "^CONFIG_PACKAGE_${pattern}=y" .config; then
             echo "  已启用: $pattern"
           else
-            echo "  ⚠ 未找到: $pattern"
+            echo "CONFIG_PACKAGE_${pattern}=y" >> .config
+            echo "  追加启用: $pattern"
           fi
         }
         
