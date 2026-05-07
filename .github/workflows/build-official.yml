@@ -1,7 +1,13 @@
 # ============================================================
 # OpenWrt 官方 24.10 稳定版编译
 # 核心：CUPS + SSR-Plus + ksmbd
-# 修复：强制启用关键包
+# 
+# 修复记录：
+# - 2026-05-07：diy-part2.sh 移到 feeds install 之后执行
+# - 2026-05-07：check_config return 1 改为 return 0（避免 bash -e 中断）
+# - 2026-05-07：增加 Force enable key packages 步骤（解决 defconfig 丢弃配置）
+# - 2026-05-07：增加 mosdns 禁用逻辑（Go 版本不兼容）
+# - 2026-05-07：rootfs 扩大到 512MB（CUPS 全家桶体积大）
 # ============================================================
 
 name: Build Official OpenWrt
@@ -39,6 +45,7 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt -b openwrt-24.10 openwrt
 
+    # 第一步：复制配置文件和脚本，添加 feed 源（注意：diy-part2.sh 不在这里执行）
     - name: Load custom feeds and config
       run: |
         cp config.txt openwrt/.config
@@ -48,17 +55,20 @@ jobs:
         cd openwrt
         ./diy-part1.sh
 
+    # 第二步：更新并安装所有 feed 源
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
+    # 第三步：在 feeds 就绪后执行 diy-part2.sh（自启动脚本 + CUPS 包双源安装）
     - name: Run diy-part2.sh (after feeds ready)
       run: |
         cd openwrt
         ./diy-part2.sh
 
+    # 第四步：删除 smpackage 中与官方冲突的包
     - name: Remove conflicting packages
       run: |
         cd openwrt
@@ -71,11 +81,14 @@ jobs:
         rm -rf tmp/
         echo "✅ 冲突包已清除"
 
+    # 第五步：在所有 feed 都就绪后，执行 defconfig
     - name: Run make defconfig
       run: |
         cd openwrt
         make defconfig
 
+    # 第六步：强制启用关键包（CUPS 扩展、打印机驱动等）
+    # 同时禁用 mosdns（Go 1.23 编译环境不兼容 Go 1.25）
     - name: Force enable key packages
       run: |
         cd openwrt
@@ -116,12 +129,10 @@ jobs:
         enable_pkg "luci-app-vlmcsd"
         enable_pkg "curl"
 
-        # ---------- 👇👇👇 就是这三行 ----------
         # 强制禁用 mosdns（Go 1.23 编译环境不兼容 Go 1.25 的 mosdns）
         sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
         echo "  已禁用 mosdns（Go 版本不兼容）"
-        # ---------- 👆👆👆 就是这三行 ----------
 
         echo "==========================="
         
@@ -129,6 +140,10 @@ jobs:
         echo "重新运行 make defconfig..."
         make defconfig
 
+    # ═══════════════════════════════════════
+    # 第一道检查：依赖链是否能完整解析
+    # 注意：check_config 的 return 必须为 0，否则 bash -e 会中断流程
+    # ═══════════════════════════════════════
     - name: Verify package requirements
       run: |
         cd openwrt
@@ -162,7 +177,7 @@ jobs:
           fi
           echo "  ❌ $name ${desc:+($desc)} - defconfig 后未解析到此包！"
           FAIL=1
-          return 0
+          return 0  # 必须 return 0，否则 bash -e 会中断
         }
         
         echo "【核心功能包依赖解析检查】"
