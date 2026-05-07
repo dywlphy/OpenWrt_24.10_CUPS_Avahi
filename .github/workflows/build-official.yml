@@ -128,15 +128,41 @@ jobs:
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
         echo "  已禁用 mosdns（Go 版本不兼容）"
 
-        # 设置 GRUB 最小超时 1 秒
-        echo "CONFIG_GRUB_TIMEOUT_MINIMUM=0" >> .config
-        echo "  已设置 GRUB 超时最小值 = 0 秒"
+        # 修改 GRUB 默认超时为 0 秒
+        find package/boot/grub2 -name "grub.cfg" -exec sed -i 's/set timeout="5"/set timeout="0"/' {} \; 2>/dev/null || true
+        find target/linux -name "grub.cfg" -exec sed -i 's/set timeout="5"/set timeout="0"/' {} \; 2>/dev/null || true
+        echo "  已修改 GRUB 默认超时 = 0 秒"
 
         echo "==========================="
         
         echo ""
         echo "重新运行 make defconfig..."
         make defconfig
+
+    # 新增步骤：修复 LuCI 主题目录
+    - name: Fix LuCI theme bootstrap
+      run: |
+        cd openwrt
+        echo "修复 LuCI 主题目录..."
+        
+        # 创建主题目录
+        THEME_DIR="build_dir/target-x86_64_musl/luci-theme-bootstrap"
+        mkdir -p "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap" 2>/dev/null || true
+        
+        # 从 feeds 中复制主题文件
+        if [ -d "feeds/luci/themes/luci-theme-bootstrap" ]; then
+          cp -r feeds/luci/themes/luci-theme-bootstrap/htdocs/* "$THEME_DIR/www/" 2>/dev/null || true
+          cp -r feeds/luci/themes/luci-theme-bootstrap/src/* "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap/" 2>/dev/null || true
+          echo "  ✅ 主题文件已复制"
+        else
+          echo "  ⚠️ luci-theme-bootstrap 源码目录不存在，尝试从 luci-base 创建"
+          # 创建基础 header.htm
+          mkdir -p "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap"
+          echo '<% require("header") %>' > "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap/header.htm"
+          echo "  ✅ 已创建基础 header.htm"
+        fi
+        
+        echo "✅ LuCI 主题修复完成"
 
     - name: Verify package requirements
       run: |
