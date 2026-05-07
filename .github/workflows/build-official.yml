@@ -201,7 +201,7 @@ jobs:
         check_config_optional "gutenprint" "打印机驱动包（可选）"
         check_config_optional "foomatic-db" "打印机数据库（可选）"
         check_config_optional "foomatic-db-engine" "打印引擎（可选）"
-        check_config "avahi-daemon" "mDNS网络发现"
+        check_config_optional "avahi-daemon" "mDNS网络发现（可选）"
         check_config "dbus" "D-Bus总线"
         echo ""
         echo "【文件共享】"
