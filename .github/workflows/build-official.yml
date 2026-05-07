@@ -8,6 +8,8 @@
 # - 2026-05-07：增加 Force enable key packages 步骤（解决 defconfig 丢弃配置）
 # - 2026-05-07：增加 mosdns 禁用逻辑（Go 版本不兼容）
 # - 2026-05-07：rootfs 扩大到 512MB（CUPS 全家桶体积大）
+# - 2026-05-07：增加 luci-theme-bootstrap 强制启用（修复 LuCI 界面报错）
+# - 2026-05-07：增加 GRUB_TIMEOUT_MINIMUM=1（修复 GRUB 启动等待 5 秒）
 # ============================================================
 
 name: Build Official OpenWrt
@@ -89,6 +91,7 @@ jobs:
 
     # 第六步：强制启用关键包（CUPS 扩展、打印机驱动等）
     # 同时禁用 mosdns（Go 1.23 编译环境不兼容 Go 1.25）
+    # 同时设置 GRUB 最小超时 1 秒
     - name: Force enable key packages
       run: |
         cd openwrt
@@ -128,11 +131,16 @@ jobs:
         enable_pkg "vlmcsd"
         enable_pkg "luci-app-vlmcsd"
         enable_pkg "curl"
+        enable_pkg "luci-theme-bootstrap"
 
         # 强制禁用 mosdns（Go 1.23 编译环境不兼容 Go 1.25 的 mosdns）
         sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
         echo "  已禁用 mosdns（Go 版本不兼容）"
+
+        # 设置 GRUB 最小超时 1 秒
+        echo "CONFIG_GRUB_TIMEOUT_MINIMUM=1" >> .config
+        echo "  已设置 GRUB 超时最小值 = 1 秒"
 
         echo "==========================="
         
