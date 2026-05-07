@@ -1,13 +1,16 @@
 #!/bin/bash
-
 # ==========================================
-# 自启动脚本 + 自动共享
+# diy-part2.sh - 自启动脚本 + 自动共享 + CUPS 包安装
+# 
+# 注意：本脚本必须在 feeds install -a 之后执行，
+# 否则 ./scripts/feeds install -f 会找不到包
 # ==========================================
 
-# 创建自启动目录
+# ----- 创建自启动目录 -----
 mkdir -p files/etc/init.d files/etc/rc.d
 
-# 服务自启动脚本
+# ----- 服务自启动脚本 -----
+# 用途：开机自动启用并启动 cupsd、avahi、ksmbd、miniupnpd、ddns
 cat > files/etc/init.d/custom-autostart << 'EOF'
 #!/bin/sh /etc/rc.common
 START=99
@@ -22,7 +25,8 @@ EOF
 chmod +x files/etc/init.d/custom-autostart
 ln -sf ../init.d/custom-autostart files/etc/rc.d/S99custom-autostart
 
-# 自动共享脚本
+# ----- 自动共享脚本 -----
+# 用途：开机自动探测 USB 存储，创建 SMB 共享文件夹
 cat > files/etc/init.d/auto-share-init << 'EOF'
 #!/bin/sh /etc/rc.common
 START=98
@@ -37,6 +41,7 @@ start() {
     TOTAL_KB=0
     IS_SYSTEM_PART=0
 
+    # 遍历 /mnt 下的所有挂载点
     for part in /mnt/*; do
         if mountpoint -q "$part" 2>/dev/null; then
             dev=$(df -k "$part" | awk 'NR==2{print $1}')
@@ -51,6 +56,7 @@ start() {
         fi
     done
 
+    # 如果没找到外部存储，降级使用系统分区
     if [ -z "$BEST_PART" ]; then
         for part in /overlay /; do
             if mountpoint -q "$part" 2>/dev/null; then
@@ -78,6 +84,7 @@ start() {
     use_kb=$((free_kb * 60 / 100))
     echo "$use_kb" > "$SHARE_DIR/.size_limit_kb"
 
+    # 配置 ksmbd 共享
     while uci delete ksmbd.@share[0] 2>/dev/null; do :; done
     uci add ksmbd share
     uci set ksmbd.@share[-1].name='Auto_Share'
@@ -107,7 +114,13 @@ EOF
 chmod +x files/etc/init.d/auto-share-init
 ln -sf ../init.d/auto-share-init files/etc/rc.d/S98auto-share-init
 
-# 强制覆盖安装 CUPS 核心包，以使用来自 small-package 的完整打印功能
-./scripts/feeds install -f -p smpackage cups cups-filters cups-bjnp ghostscript gutenprint foomatic-db foomatic-db-engine avahi-daemon dbus luci-app-cupsd
+# ==========================================
+# CUPS 相关包安装
+# 注意：必须在 feeds install -a 之后调用
+# ==========================================
+
+# 从 smpackage 安装核心包（第三方源特有的 CUPS 包）
+echo "从 smpackage 源安装 CUPS 核心包..."
+./scripts/feeds install -f -p smpackage cups cups-filters dbus luci-app-cupsd 2>/dev/null
 
 echo "✅ diy-part2.sh 执行完成"
