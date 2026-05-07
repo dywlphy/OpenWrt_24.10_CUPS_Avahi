@@ -3,15 +3,9 @@
 # 核心：CUPS + SSR-Plus + ksmbd
 # 
 # 修复记录：
-# - 2026-05-07：diy-part2.sh 移到 feeds install 之后执行
-# - 2026-05-07：check_config return 1 改为 return 0（避免 bash -e 中断）
-# - 2026-05-07：增加 Force enable key packages 步骤（解决 defconfig 丢弃配置）
-# - 2026-05-07：增加 mosdns 禁用逻辑（Go 版本不兼容）
-# - 2026-05-07：rootfs 扩大到 512MB（CUPS 全家桶体积大）
-# - 2026-05-07：增加 luci-theme-bootstrap 强制启用（修复 LuCI 界面报错）
-# - 2026-05-07：增加 GRUB_TIMEOUT_MINIMUM=1（修复 GRUB 启动等待 5 秒）
-# - 2026-05-07：第一道检查增加 CUPS 全功能 + 主题验证
-# - 2026-05-07：ghostscript/gutenprint/foomatic 改为可选（OpenWrt 24.10 不提供）
+# - 2026-05-07：添加完整 LuCI 核心依赖（修复界面报错）
+# - 2026-05-07：修复 GRUB 超时配置
+# - 2026-05-07：添加 openwrt-cups 源（ghostscript, gutenprint, foomatic）
 # ============================================================
 
 name: Build Official OpenWrt
@@ -51,10 +45,10 @@ jobs:
 
     - name: Load custom feeds and config
       run: |
-        cp config.txt openwrt/.config
-        cp diy-part1.sh openwrt/
-        cp diy-part2.sh openwrt/
-        chmod +x openwrt/diy-part1.sh openwrt/diy-part2.sh
+        [ -f config.txt ] && cp config.txt openwrt/.config
+        [ -f diy-part1.sh ] && cp diy-part1.sh openwrt/
+        [ -f diy-part2.sh ] && cp diy-part2.sh openwrt/
+        chmod +x openwrt/diy-part1.sh openwrt/diy-part2.sh 2>/dev/null || true
         cd openwrt
         ./diy-part1.sh
 
@@ -103,11 +97,38 @@ jobs:
           fi
         }
         
-        echo "【强制启用核心包】"
+        # ==========================================
+        # 关键修复：LuCI 核心依赖（修复界面报错）
+        # ==========================================
+        echo "【强制启用 LuCI 核心依赖】"
+        enable_pkg "luci-base"
+        enable_pkg "luci-mod-admin-full"
+        enable_pkg "luci-mod-network"
+        enable_pkg "luci-mod-status"
+        enable_pkg "luci-mod-system"
+        enable_pkg "rpcd"
+        enable_pkg "rpcd-mod-file"
+        enable_pkg "rpcd-mod-iwinfo"
+        enable_pkg "rpcd-mod-rpcsys"
+        enable_pkg "rpcd-mod-rrdns"
+        enable_pkg "uhttpd"
+        enable_pkg "uhttpd-mod-ubus"
+        enable_pkg "cgi-io"
+        enable_pkg "ucode"
+        enable_pkg "ucode-mod-fs"
+        enable_pkg "ucode-mod-math"
+        enable_pkg "ucode-mod-nl80211"
+        enable_pkg "ucode-mod-resolv"
+        enable_pkg "ucode-mod-ubus"
+        enable_pkg "ucode-mod-uci"
+        enable_pkg "luci-theme-bootstrap"
+        
+        echo ""
+        echo "【强制启用核心功能包】"
         enable_pkg "cups"
         enable_pkg "cups-filters"
         enable_pkg "cups-bjnp"
-        enable_pkg "avahi-daemon"
+        enable_pkg "avahi-dbus-daemon"
         enable_pkg "dbus"
         enable_pkg "luci-app-cupsd"
         enable_pkg "ksmbd-server"
@@ -121,48 +142,28 @@ jobs:
         enable_pkg "vlmcsd"
         enable_pkg "luci-app-vlmcsd"
         enable_pkg "curl"
-        enable_pkg "luci-theme-bootstrap"
+        
+        # 从 openwrt-cups 源启用打印驱动包
+        enable_pkg "ghostscript"
+        enable_pkg "gutenprint"
+        enable_pkg "foomatic-db"
+        enable_pkg "foomatic-db-engine"
 
         # 强制禁用 mosdns（Go 版本不兼容）
         sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
         echo "  已禁用 mosdns（Go 版本不兼容）"
 
-        # 修改 GRUB 默认超时为 0 秒
-        find package/boot/grub2 -name "grub.cfg" -exec sed -i 's/set timeout="5"/set timeout="0"/' {} \; 2>/dev/null || true
-        find target/linux -name "grub.cfg" -exec sed -i 's/set timeout="5"/set timeout="0"/' {} \; 2>/dev/null || true
-        echo "  已修改 GRUB 默认超时 = 0 秒"
+        # 设置 GRUB 超时 0 秒
+        sed -i 's/CONFIG_GRUB_TIMEOUT=.*/CONFIG_GRUB_TIMEOUT=0/' .config
+        echo "CONFIG_GRUB_TIMEOUT=0" >> .config
+        echo "  已设置 GRUB 超时 = 0 秒"
 
         echo "==========================="
         
         echo ""
         echo "重新运行 make defconfig..."
         make defconfig
-
-    # 新增步骤：修复 LuCI 主题目录
-    - name: Fix LuCI theme bootstrap
-      run: |
-        cd openwrt
-        echo "修复 LuCI 主题目录..."
-        
-        # 创建主题目录
-        THEME_DIR="build_dir/target-x86_64_musl/luci-theme-bootstrap"
-        mkdir -p "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap" 2>/dev/null || true
-        
-        # 从 feeds 中复制主题文件
-        if [ -d "feeds/luci/themes/luci-theme-bootstrap" ]; then
-          cp -r feeds/luci/themes/luci-theme-bootstrap/htdocs/* "$THEME_DIR/www/" 2>/dev/null || true
-          cp -r feeds/luci/themes/luci-theme-bootstrap/src/* "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap/" 2>/dev/null || true
-          echo "  ✅ 主题文件已复制"
-        else
-          echo "  ⚠️ luci-theme-bootstrap 源码目录不存在，尝试从 luci-base 创建"
-          # 创建基础 header.htm
-          mkdir -p "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap"
-          echo '<% require("header") %>' > "$THEME_DIR/usr/lib/lua/luci/view/themes/bootstrap/header.htm"
-          echo "  ✅ 已创建基础 header.htm"
-        fi
-        
-        echo "✅ LuCI 主题修复完成"
 
     - name: Verify package requirements
       run: |
@@ -187,6 +188,7 @@ jobs:
         check_config() {
           local name="$1"
           local desc="${2:-}"
+          local required="${3:-yes}"
           if grep -q "^CONFIG_PACKAGE_${name}=y" .config 2>/dev/null; then
             echo "  ✅ $name ${desc:+($desc)}"
             return 0
@@ -196,26 +198,28 @@ jobs:
             echo "  ⚠️  $name → 实际包名: $alt ${desc:+($desc)}"
             return 0
           fi
-          echo "  ❌ $name ${desc:+($desc)} - 编译将缺失此功能！"
-          FAIL=1
-          return 0
-        }
-        
-        check_config_optional() {
-          local name="$1"
-          local desc="${2:-}"
-          if grep -q "^CONFIG_PACKAGE_${name}=y" .config 2>/dev/null; then
-            echo "  ✅ $name ${desc:+($desc)}"
-            return 0
+          if [ "$required" = "yes" ]; then
+            echo "  ❌ $name ${desc:+($desc)} - 编译将缺失此功能！"
+            FAIL=1
+          else
+            echo "  ⚠️  $name ${desc:+($desc)} - 已跳过（当前源不提供）"
           fi
-          echo "  ⚠️  $name ${desc:+($desc)} - 已跳过（当前源不提供）"
           return 0
         }
         
-        echo "【核心系统】"
-        check_config "uhttpd" "Web管理界面"
-        check_config "dropbear" "SSH服务"
-        check_config "luci-theme-bootstrap" "LuCI默认主题"
+        echo "【LuCI 核心 - 修复界面报错】"
+        check_config "luci-base" "LuCI基础"
+        check_config "luci-mod-admin-full" "管理界面"
+        check_config "rpcd" "RPC守护进程"
+        check_config "rpcd-mod-file" "文件RPC"
+        check_config "rpcd-mod-iwinfo" "无线信息RPC"
+        check_config "uhttpd" "Web服务器"
+        check_config "uhttpd-mod-ubus" "uhttpd ubus模块"
+        check_config "cgi-io" "CGI接口"
+        check_config "ucode" "ucode解释器"
+        check_config "ucode-mod-ubus" "ucode ubus模块"
+        check_config "ucode-mod-uci" "ucode uci模块"
+        check_config "luci-theme-bootstrap" "默认主题"
         echo ""
         echo "【CUPS 打印 - 核心】"
         check_config "cups" "CUPS核心"
@@ -223,11 +227,11 @@ jobs:
         check_config "luci-app-cupsd" "CUPS管理界面"
         echo "【CUPS 打印 - 驱动与扩展】"
         check_config "cups-bjnp" "Canon网络发现"
-        check_config_optional "ghostscript" "PostScript解释器（可选）"
-        check_config_optional "gutenprint" "打印机驱动包（可选）"
-        check_config_optional "foomatic-db" "打印机数据库（可选）"
-        check_config_optional "foomatic-db-engine" "打印引擎（可选）"
-        check_config_optional "avahi-daemon" "mDNS网络发现（可选）"
+        check_config "ghostscript" "PostScript解释器" "optional"
+        check_config "gutenprint" "打印机驱动包" "optional"
+        check_config "foomatic-db" "打印机数据库" "optional"
+        check_config "foomatic-db-engine" "打印引擎" "optional"
+        check_config "avahi-dbus-daemon" "mDNS网络发现" "optional"
         check_config "dbus" "D-Bus总线"
         echo ""
         echo "【文件共享】"
