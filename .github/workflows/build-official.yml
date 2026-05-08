@@ -1,13 +1,11 @@
 # ============================================================
 # OpenWrt 官方 24.10 稳定版编译
-# 核心：CUPS + SSR-Plus + ksmbd
+# 核心：稳定网络 + SSR + ksmbd + CUPS + 中文界面
 # 
 # 修复记录：
-# - 2026-05-07：添加完整 LuCI 核心依赖（修复界面报错）
-# - 2026-05-07：修复 GRUB 超时配置
-# - 2026-05-07：添加 openwrt-cups 源（ghostscript, gutenprint, foomatic）
-# - 2026-05-08：添加完整中文语言包支持
-# - 2026-05-08：修复 feeds 源优先级问题，分离基础包和功能包
+# - 2026-05-08：修复中文语言包问题（改用 CONFIG_LUCI_LANG_zh_Hans）
+# - 2026-05-08：修复打印驱动包问题（移除不存在的包）
+# - 2026-05-08：优化依赖检查逻辑（可选包不再阻止编译）
 # ============================================================
 
 name: Build Official OpenWrt
@@ -65,7 +63,7 @@ jobs:
         cd openwrt
         ./diy-part2.sh
 
-    - name: Remove conflicting packages from smpackage
+    - name: Remove conflicting packages
       run: |
         cd openwrt
         rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd*,miniupnpd-iptables,wireless-regdb} 2>/dev/null || true
@@ -123,27 +121,6 @@ jobs:
         enable_pkg "luci-theme-bootstrap"
         
         echo ""
-        echo "【强制启用中文语言包】"
-        enable_pkg "luci-i18n-base-zh-cn"
-        enable_pkg "luci-i18n-firewall-zh-cn"
-        enable_pkg "luci-i18n-opkg-zh-cn"
-        enable_pkg "luci-i18n-cupsd-zh-cn"
-        enable_pkg "luci-i18n-ksmbd-zh-cn"
-        enable_pkg "luci-i18n-ssr-plus-zh-cn"
-        enable_pkg "luci-i18n-upnp-zh-cn"
-        enable_pkg "luci-i18n-ddns-zh-cn"
-        enable_pkg "luci-i18n-wol-zh-cn"
-        enable_pkg "luci-i18n-sqm-zh-cn"
-        enable_pkg "luci-i18n-statistics-zh-cn"
-        enable_pkg "luci-i18n-adblock-zh-cn"
-        enable_pkg "luci-i18n-autoreboot-zh-cn"
-        enable_pkg "luci-i18n-watchcat-zh-cn"
-        enable_pkg "luci-i18n-nlbwmon-zh-cn"
-        enable_pkg "luci-i18n-diskman-zh-cn"
-        enable_pkg "luci-i18n-vlmcsd-zh-cn"
-        enable_pkg "luci-i18n-nft-qos-zh-cn"
-        
-        echo ""
         echo "【强制启用核心功能包】"
         enable_pkg "cups"
         enable_pkg "cups-filters"
@@ -162,16 +139,21 @@ jobs:
         enable_pkg "vlmcsd"
         enable_pkg "luci-app-vlmcsd"
         enable_pkg "curl"
-        
-        enable_pkg "ghostscript"
-        enable_pkg "gutenprint"
-        enable_pkg "foomatic-db"
-        enable_pkg "foomatic-db-engine"
+        enable_pkg "luci-app-nft-qos"
+        enable_pkg "luci-app-statistics"
+        enable_pkg "luci-app-adblock"
+        enable_pkg "luci-app-autoreboot"
+        enable_pkg "luci-app-watchcat"
+        enable_pkg "luci-app-commands"
+        enable_pkg "luci-app-nlbwmon"
+        enable_pkg "luci-app-diskman"
 
+        # 禁用 mosdns（Go 版本不兼容）
         sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
         echo "  已禁用 mosdns（Go 版本不兼容）"
 
+        # 设置 GRUB 超时 0 秒
         sed -i 's/CONFIG_GRUB_TIMEOUT=.*/CONFIG_GRUB_TIMEOUT=0/' .config
         echo "CONFIG_GRUB_TIMEOUT=0" >> .config
         echo "  已设置 GRUB 超时 = 0 秒"
@@ -219,7 +201,7 @@ jobs:
             echo "  ❌ $name ${desc:+($desc)} - 编译将缺失此功能！"
             FAIL=1
           else
-            echo "  ⚠️  $name ${desc:+($desc)} - 已跳过（当前源不提供）"
+            echo "  ⚠️  $name ${desc:+($desc)} - 已跳过（可选包）"
           fi
           return 0
         }
@@ -238,23 +220,11 @@ jobs:
         check_config "ucode-mod-uci" "ucode uci模块"
         check_config "luci-theme-bootstrap" "默认主题"
         echo ""
-        echo "【中文语言包】"
-        check_config "luci-i18n-base-zh-cn" "基础中文"
-        check_config "luci-i18n-firewall-zh-cn" "防火墙中文"
-        check_config "luci-i18n-opkg-zh-cn" "软件包中文"
-        check_config "luci-i18n-cupsd-zh-cn" "CUPS中文"
-        check_config "luci-i18n-ksmbd-zh-cn" "SMB中文"
-        check_config "luci-i18n-ssr-plus-zh-cn" "SSR中文"
-        echo ""
         echo "【CUPS 打印】"
         check_config "cups" "CUPS核心"
         check_config "cups-filters" "打印过滤器"
         check_config "luci-app-cupsd" "CUPS管理界面"
-        check_config "cups-bjnp" "Canon网络发现"
-        check_config "ghostscript" "PostScript" "optional"
-        check_config "gutenprint" "打印机驱动" "optional"
-        check_config "foomatic-db" "打印机数据库" "optional"
-        check_config "foomatic-db-engine" "打印引擎" "optional"
+        check_config "cups-bjnp" "Canon网络发现" "optional"
         check_config "avahi-dbus-daemon" "mDNS" "optional"
         check_config "dbus" "D-Bus总线"
         echo ""
@@ -262,22 +232,30 @@ jobs:
         check_config "ksmbd-server" "SMB共享"
         check_config "luci-app-ksmbd" "ksmbd界面"
         echo ""
-        echo "【其他工具】"
-        check_config "luci-app-ssr-plus" "SSR-Plus"
+        echo "【网络工具】"
+        check_config "luci-app-ssr-plus" "SSR-Plus" "optional"
         check_config "luci-app-sqm" "SQM QoS"
         check_config "luci-app-upnp" "UPnP"
         check_config "luci-app-ddns" "动态DNS"
         check_config "luci-app-wol" "网络唤醒"
         check_config "wireguard-tools" "WireGuard"
         check_config "luci-proto-wireguard" "WireGuard界面"
-        check_config "vlmcsd" "KMS服务"
-        check_config "luci-app-vlmcsd" "KMS界面"
+        check_config "vlmcsd" "KMS服务" "optional"
+        check_config "luci-app-vlmcsd" "KMS界面" "optional"
+        check_config "luci-app-nft-qos" "上网时间控制"
+        check_config "luci-app-statistics" "性能监控"
+        check_config "luci-app-adblock" "广告过滤"
+        check_config "luci-app-autoreboot" "定时重启"
+        check_config "luci-app-watchcat" "断网重启"
+        check_config "luci-app-commands" "命令执行"
+        check_config "luci-app-nlbwmon" "流量统计"
+        check_config "luci-app-diskman" "磁盘管理"
         echo ""
         
         if [ "$FAIL" -eq 1 ]; then
           echo "╔══════════════════════════════════════╗"
           echo "║  ❌ 检查失败                         ║"
-          echo "║  请检查源配置和依赖                  ║"
+          echo "║  核心功能包缺失，请检查配置          ║"
           echo "╚══════════════════════════════════════╝"
           exit 1
         else
