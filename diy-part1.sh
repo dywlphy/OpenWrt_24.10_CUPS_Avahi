@@ -24,3 +24,4 @@ echo "✅ feeds.conf 配置完成"
 echo "已添加："
 echo "  - 官方: packages, luci (优先级高)"
 echo "  - 第三方: immortalwrt, kenzo, small, smpackage, helloworld, cups"
+cat feeds.conf
