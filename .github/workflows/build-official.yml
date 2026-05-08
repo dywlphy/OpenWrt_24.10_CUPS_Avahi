@@ -64,6 +64,7 @@ jobs:
           rm -rf feeds/printing/qpdf 2>/dev/null || true
           rm -rf feeds/printing/poppler 2>/dev/null || true
           rm -f feeds/printing.index
+          rm -rf tmp/ 2>/dev/null || true
           echo "【生成 defconfig】"
           make defconfig
 
