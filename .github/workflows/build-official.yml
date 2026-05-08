@@ -2,20 +2,23 @@
 # OpenWrt 官方 24.10 稳定版编译
 # 核心：CUPS + SSR-Plus + ksmbd + 中文界面
 # ============================================================
+
 name: Build Official OpenWrt
 
 on:
+  repository_dispatch:
   workflow_dispatch:
 
-env:                    # ← env 在 jobs 外面
+env:
   UPLOAD_BIN_DIR: false
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
 
-jobs:                   # ← 只有一个 jobs
+jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
+    
     steps:
     - name: Checkout
       uses: actions/checkout@main
