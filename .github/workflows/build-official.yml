@@ -24,11 +24,15 @@ jobs:
       - name: 下载 OpenWrt SDK
         run: |
           cd /home/runner/work/openwrt-official-build/openwrt-official-build
-          SDK_URL="https://downloads.openwrt.org/releases/24.10.0/openwrt-sdk-24.10.0-x86-64_gcc13.3.x_musl.Linux-x86_64.tar.xz"
+          SDK_URL="https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           echo "正在下载 OpenWrt SDK..."
-          wget -q --show-progress "$SDK_URL" -O openwrt-sdk.tar.xz
+          wget -q --show-progress "$SDK_URL" -O openwrt-sdk.tar.zst
+          if [ $? -ne 0 ]; then
+            echo "错误: SDK 下载失败！"
+            exit 1
+          fi
           echo "正在解压 SDK..."
-          tar -xJf openwrt-sdk.tar.xz
+          tar --zstd -xf openwrt-sdk.tar.zst
           mv openwrt-sdk-* openwrt
           cd openwrt
           echo "SDK 目录: $(pwd)"
