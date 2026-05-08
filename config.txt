@@ -1,5 +1,5 @@
 # ============================================================
-# OpenWrt 24.10 x86_64 编译配置x
+# OpenWrt 24.10 x86_64 编译配置
 # ============================================================
 
 # ---- 目标平台 ----
@@ -67,18 +67,13 @@ CONFIG_PACKAGE_ucode-mod-ubus=y
 CONFIG_PACKAGE_ucode-mod-uci=y
 
 # ============================================================
-# CUPS 打印系统（printing 源）
+# CUPS 打印系统（printing 源 - master-0123）
 # ============================================================
-# 注意：qpdf/poppler/openprinting-cups-filters 与 OpenWrt 24.10 不兼容，已移除
 CONFIG_PACKAGE_cups=y
 CONFIG_PACKAGE_cups-bjnp=y
 CONFIG_PACKAGE_ghostscript=y
 CONFIG_PACKAGE_splix=y
-
-# CUPS LuCI 管理（smpackage 源）
 CONFIG_PACKAGE_luci-app-cupsd=y
-
-# 打印机发现服务
 CONFIG_PACKAGE_avahi-dbus-daemon=y
 CONFIG_PACKAGE_dbus=y
 
