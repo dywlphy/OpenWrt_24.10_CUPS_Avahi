@@ -3,6 +3,8 @@
 # diy-part1.sh - 配置 Feed 源（基础版）
 # ==========================================
 
+cd openwrt
+
 echo "===== 配置 feeds ====="
 
 # 追加第三方源（保留官方默认的 packages 和 luci）
@@ -13,3 +15,10 @@ echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.defa
 echo "src-git immortalwrt https://github.com/immortalwrt/packages.git;openwrt-24.10" >> feeds.conf.default
 
 echo "  已追加第三方源到 feeds.conf.default"
+
+# 更新feeds
+echo "===== 更新 feeds ====="
+./scripts/feeds update -a
+./scripts/feeds install -a
+
+echo "===== diy-part1.sh 执行完成 ====="
