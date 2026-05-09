@@ -68,6 +68,8 @@ CONFIG_PACKAGE_luci-app-cupsd=y
 # 打印机发现服务
 CONFIG_PACKAGE_avahi-dbus-daemon=y
 CONFIG_PACKAGE_dbus=y
+# USB 打印机内核支持
+CONFIG_PACKAGE_kmod-usb-printer=y
 # ============================================================
 # 文件共享
 # ============================================================
