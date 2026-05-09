@@ -57,6 +57,7 @@ jobs:
         cd openwrt
         # 原有的冲突包清理
         rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd*,miniupnpd-iptables,wireless-regdb} 2>/dev/null || true
+        rm -rf feeds/kenzo/{curl,dbus} 2>/dev/null || true
         rm -rf feeds/packages/net/onionshare-cli 2>/dev/null || true
         find . -name "onionshare-cli" -type d -exec rm -rf {} \; 2>/dev/null || true
         for idx in feeds/*.index; do
