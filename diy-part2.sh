@@ -34,18 +34,6 @@ if [ -f "$CURL_MK" ]; then
     echo "  ✅ curl Makefile 已修复"
 fi
 
-# 修复 cups-bjnp
-CUPSBJNP_MK="feeds/immortalwrt/utils/cups-bjnp/Makefile"
-if [ -f "$CUPSBJNP_MK" ]; then
-    # 1. 修复 backend 目录路径
-    sed -i 's|--with-cupsbackenddir=$(STAGING_DIR)/usr/include/cups|--with-cupsbackenddir=$(STAGING_DIR)/usr/lib/cups/backend|' "$CUPSBJNP_MK"
-    # 2. 添加编译顺序依赖，强制在 cups 之后编译
-    sed -i '/^DEPENDS:=/ s|$| cups|' "$CUPSBJNP_MK"
-    echo "  ✅ cups-bjnp Makefile 已修复"
-else
-    echo "  ⚠️ 未找到 cups-bjnp Makefile"
-fi
-
 # 修复 ghostscript
 GS_MAKEFILE=$(find feeds -name "ghostscript" -type d 2>/dev/null | head -1)/Makefile
 if [ -f "$GS_MAKEFILE" ]; then
@@ -215,6 +203,19 @@ echo "从 immortalwrt 源安装扩展包..."
 ./scripts/feeds install -f -p immortalwrt cups-bjnp && echo "  ✅ cups-bjnp 安装成功" || echo "  ⚠️ cups-bjnp 安装失败"
 echo "从 smpackage 源安装 CUPS 核心包..."
 ./scripts/feeds install -f -p smpackage cups cups-filters dbus luci-app-cupsd && echo "  ✅ CUPS 核心包安装成功" || echo "  ⚠️ CUPS 核心包安装失败"
+
+# ========== 修复 cups-bjnp Makefile（必须在 feeds install 之后）==========
+CUPSBJNP_MK="feeds/immortalwrt/utils/cups-bjnp/Makefile"
+if [ -f "$CUPSBJNP_MK" ]; then
+    # 修复 backend 目录路径
+    sed -i 's|--with-cupsbackenddir=$(STAGING_DIR)/usr/include/cups|--with-cupsbackenddir=$(STAGING_DIR)/usr/lib/cups/backend|' "$CUPSBJNP_MK"
+    # 添加编译顺序依赖
+    sed -i '/^DEPENDS:=/ s/$/ cups/' "$CUPSBJNP_MK"
+    echo "  ✅ cups-bjnp Makefile 已修复"
+else
+    echo "  ⚠️ 未找到 cups-bjnp Makefile"
+fi
+
 echo "从官方源安装 avahi..."
 ./scripts/feeds install avahi-dbus-daemon && echo "  ✅ avahi-dbus-daemon 安装成功" || {
     ./scripts/feeds install avahi-nodbus-daemon && echo "  ✅ avahi-nodbus-daemon 安装成功" || echo "  ⚠️ avahi 安装失败"
