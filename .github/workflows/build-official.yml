@@ -166,6 +166,7 @@ jobs:
         # enable_pkg "gutenprint"
         # enable_pkg "foomatic-db"
         # enable_pkg "foomatic-db-engine"
+        enable_pkg "openprinting-cups-filters"
         sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
         sed -i 's/CONFIG_GRUB_TIMEOUT=.*/CONFIG_GRUB_TIMEOUT=0/' .config
