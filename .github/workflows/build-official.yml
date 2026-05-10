@@ -238,6 +238,7 @@ jobs:
         # enable_pkg "foomatic-db"
         # enable_pkg "foomatic-db-engine"
         enable_pkg "openprinting-cups-filters"
+        # 禁用 xray-core（必须在所有 enable 之后）
         sed -i 's/^CONFIG_PACKAGE_xray-core=y/# CONFIG_PACKAGE_xray-core is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
         sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
@@ -372,6 +373,8 @@ jobs:
       run: |
         cd openwrt
         make defconfig
+        # 禁用 xray-core（必须在所有 enable 之后）
+        sed -i 's/^CONFIG_PACKAGE_xray-core=y/# CONFIG_PACKAGE_xray-core is not set/' .config
         echo "✅ defconfig 完成，依赖已解析"
     - name: Debug - Check missing lib dependencies
       run: |
