@@ -11,7 +11,7 @@ echo "src-git luci https://github.com/openwrt/luci.git;openwrt-24.10" >> feeds.c
 echo "src-git immortalwrt https://github.com/immortalwrt/packages.git;openwrt-24.10" >> feeds.conf
 echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git" >> feeds.conf
 echo "src-git small https://github.com/kenzok8/small.git" >> feeds.conf
-echo "src-git smpackage https://github.com/kenzok8/small-package" >> feeds.conf
+echo "src-git smpackage https://github.com/dywlphy/small-package" >> feeds.conf
 echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf
 echo "src-git cups https://github.com/op4packages/openwrt-cups.git" >> feeds.conf
 echo "src-git brlaser https://github.com/pdewacht/brlaser.git" >> feeds.conf
