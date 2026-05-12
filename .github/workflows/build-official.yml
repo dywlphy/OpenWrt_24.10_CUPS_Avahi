@@ -1,22 +1,40 @@
-# ============================================================
-# OpenWrt 官方 24.10 稳定版编译
-# 方案三：精确拉取，最小 污染
-# 核心：CUPS + SSR-Plus + ksmbd + 中文界面
-# ============================================================
-name: Build Official OpenWrt
+#
+# Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
+#
+# This is free software, licensed under the MIT License.
+# See /LICENSE for more information.
+#
+# https://github.com/P3TERX/Actions-OpenWrt
+# Description: Build OpenWrt 24.10 Official Stable Version
+#
+
+name: Build OpenWrt 24.10 Official
 
 on:
+  repository_dispatch:
   workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH connection to Actions'
+        required: false
+        default: 'false'
 
 env:
+  REPO_URL: https://github.com/openwrt/openwrt
+  REPO_BRANCH: openwrt-24.10
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: config.txt
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
   UPLOAD_BIN_DIR: false
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
+  RELEASE_TAG: OpenWrt-24.10
+  TZ: Asia/Shanghai
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
 
     steps:
     - name: Checkout
@@ -29,476 +47,79 @@ jobs:
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
         sudo docker image prune --all --force
         sudo -E apt-get -qq update
-        sudo -E apt-get -qq install build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-setuptools rsync swig unzip zlib1g-dev file wget cpio rsync unzip file libelf-dev libfuse-dev libpam0g-dev libzstd-dev cups libcups2-dev
+        sudo -E apt-get -qq install $(curl -fsSL https://raw.githubusercontent.com/P3TERX/Actions-OpenWrt/main/depends-ubuntu-2204)
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
-        sudo timedatectl set-timezone Asia/Shanghai
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
 
-    - name: Clone OpenWrt 24.10
+    - name: Clone source code
+      working-directory: /workdir
       run: |
-        git clone https://github.com/openwrt/openwrt -b openwrt-24.10 openwrt
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-    - name: Load custom feeds and config
+    - name: Load custom feeds
       run: |
-        [ -f config.txt ] && cp config.txt openwrt/.config
-        [ -f diy-part1.sh ] && cp diy-part1.sh openwrt/
-        [ -f diy-part2.sh ] && cp diy-part2.sh openwrt/
-        sed -i 's/\r$//' openwrt/diy-part1.sh openwrt/diy-part2.sh 2>/dev/null || true
-        chmod +x openwrt/diy-part1.sh openwrt/diy-part2.sh 2>/dev/null || true
+        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+        chmod +x $DIY_P1_SH
         cd openwrt
-        ./diy-part1.sh
-        echo "--- feeds.conf 内容 ---"
-        cat -A feeds.conf
-
-    - name: Cache OpenWrt source packages (dl)
-      uses: actions/cache@v4
-      with:
-        path: openwrt/dl
-        key: openwrt-dl-${{ hashFiles('diy-part1.sh') }}
-        restore-keys: openwrt-dl-
-
-    - name: Cache OpenWrt build artifacts
-      uses: actions/cache@v4
-      with:
-        path: |
-          openwrt/staging_dir
-          openwrt/build_dir
-        key: openwrt-build-${{ hashFiles('config.txt') }}
-        restore-keys: openwrt-build-
+        $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
-    - name: Install feeds - official only
+    - name: Install feeds
+      run: cd openwrt && ./scripts/feeds install -a
+
+    - name: Load custom configuration
       run: |
+        [ -e files ] && mv files openwrt/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        chmod +x $DIY_P2_SH
         cd openwrt
-        ./scripts/feeds install -a -p packages
-        ./scripts/feeds install -a -p luci
+        $GITHUB_WORKSPACE/$DIY_P2_SH
 
-    - name: Install feeds - third party (precise)
-      run: |
-        cd openwrt
+    - name: SSH connection to Actions
+      uses: P3TERX/ssh2actions@v1.0.0
+      if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh != 'false') || contains(github.event.action, 'ssh')
+      env:
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
-        # ===== smpackage 源 =====
-        # CUPS 打印核心
-        ./scripts/feeds install -p smpackage cups
-        ./scripts/feeds install -p smpackage libcupsimage
-        ./scripts/feeds install -p smpackage cups-filters
-        ./scripts/feeds install -p smpackage luci-app-cupsd
-        # SSR-Plus
-        ./scripts/feeds install -p smpackage luci-app-ssr-plus
-        ./scripts/feeds install -p smpackage luci-i18n-ssr-plus-zh-cn
-        ./scripts/feeds install -p smpackage xray-core
-        ./scripts/feeds install -p smpackage v2ray-geodata
-        ./scripts/feeds install -p smpackage v2ray-geosite
-        # KMS 激活
-        ./scripts/feeds install -p smpackage vlmcsd
-        ./scripts/feeds install -p smpackage luci-app-vlmcsd
-        # ksmbd 共享
-        ./scripts/feeds install -p smpackage autoshare-ksmbd
-        ./scripts/feeds install -p smpackage luci-app-ksmbd
-        ./scripts/feeds install -p smpackage luci-i18n-ksmbd-zh-cn
-
-        # ===== printing 源（tobiaswaldvogel）=====
-        ./scripts/feeds install -p printing ghostscript
-        ./scripts/feeds install -p printing gutenprint
-        ./scripts/feeds install -p printing cups-bjnp
-
-        # ===== hplipfeed 源（woniuzfb）=====
-        ./scripts/feeds install -p hplipfeed hplip
-
-        # ===== brlaser 源 =====
-        # ./scripts/feeds install -p brlaser brlaser
-        ./scripts/feeds install -p printing brlaser
-
-        # ===== immortalwrt 源 =====
-        ./scripts/feeds install -p immortalwrt luci-app-autoreboot
-
-        # ===== 官方 packages 源 =====
-        ./scripts/feeds install -p packages luci-app-adblock
-        ./scripts/feeds install -p packages luci-app-nlbwmon
-        ./scripts/feeds install -p packages luci-app-commands
-        ./scripts/feeds install -p packages luci-app-watchcat
-        ./scripts/feeds install -p printing lcms2
-        ./scripts/feeds install -p printing liblcms2
-        echo "===== 修复 libcupsfilters 依赖 ====="
-        if [ -f "feeds/printing/libcupsfilters/Makefile" ]; then
-          echo "修复 libcupsfilters Makefile 依赖..."
-          sed -i 's/DEPENDS:=/DEPENDS:=+lcms2 /' feeds/printing/libcupsfilters/Makefile
-          sed -i '/DEPENDS:/s/$/ +lcms2/' feeds/printing/libcupsfilters/Makefile
-          echo "✅ libcupsfilters 依赖已修复"
-        fi
-        if [ -f "feeds/printing/lcms2/Makefile" ]; then
-          sed -i 's/DEPENDS:=/DEPENDS:=+liblcms2 /' feeds/printing/lcms2/Makefile
-          echo "✅ lcms2 Makefile 依赖已修复"
-        fi
-        if [ -f "feeds/printing/cups-bjnp/Makefile" ]; then
-          sed -i '/DEPENDS:/s/$/ +libcups/' feeds/printing/cups-bjnp/Makefile
-          echo "✅ cups-bjnp Makefile 依赖已修复"
-        fi
-        echo "✅ 精确安装完成"
-        
-    - name: Run diy-part2.sh
-      run: |
-        cd openwrt
-        ./diy-part2.sh
-
-    - name: Remove conflicting packages
-      run: |
-        cd openwrt
-        # 删除 smpackage 中与官方冲突的包
-        rm -rf feeds/smpackage/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,vsftpd*,miniupnpd-iptables,wireless-regdb,curl,dbus,openssl} 2>/dev/null || true
-        
-        # 删除 immortalwrt 中与官方/smpackage 冲突的包
-        rm -rf feeds/immortalwrt/{base-files,dnsmasq,firewall*,fullconenat,libnftnl,nftables,ppp,opkg,ucl,upx,curl,dbus,openssl,cups,cups-filters,libcups,libcupsimage} 2>/dev/null || true
-        
-        # 删除不需要的大包
-        rm -rf feeds/packages/net/onionshare-cli 2>/dev/null || true
-        rm -rf feeds/smpackage/webd 2>/dev/null || true
-        find . -name "onionshare-cli" -type d -exec rm -rf {} \; 2>/dev/null || true
-        
-        # 删除 samba4
-        rm -rf feeds/smpackage/samba4* 2>/dev/null || true
-        rm -rf feeds/*/net/samba4 2>/dev/null || true
-        find . -name "samba4" -type d -exec rm -rf {} \; 2>/dev/null || true
-        
-        # 清理 index
-        for idx in feeds/*.index; do
-          [ -f "$idx" ] && sed -i '/onionshare-cli/d' "$idx" || true
-        done
-        
-        # dbus-libs 修复（必须在所有 feeds 操作之后）
-        DBUS_MK="feeds/packages/utils/dbus/Makefile"
-        if [ -f "$DBUS_MK" ] && ! grep -q "Package/dbus-libs" "$DBUS_MK"; then
-          sed -i '/^define Package\/dbus$/,/^endef$/{ /DEPENDS:/ s/$/ +dbus-libs/ }' "$DBUS_MK"
-          printf '\ndefine Package/dbus-libs\n  SECTION:=libs\n  CATEGORY:=Libraries\n  DEPENDS:=+libexpat\n  TITLE:=D-Bus library\nendef\n\ndefine Package/dbus-libs/install\n\t$(INSTALL_DIR) $(1)/usr/lib\n\t$(CP) $(PKG_INSTALL_DIR)/usr/lib/libdbus-1.so* $(1)/usr/lib/\nendef\n\n$(eval $(call BuildPackage,dbus-libs))\n' >> "$DBUS_MK"
-          echo "  ✅ dbus-libs 修复已应用"
-        fi
-        
-        rm -rf tmp/
-        echo "✅ 冲突包已清除"
-
-    - name: Run make defconfig
+    - name: Download package
+      id: package
       run: |
         cd openwrt
         make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
-    - name: Debug Print feeds conf
+    - name: Compile the firmware
+      id: compile
       run: |
         cd openwrt
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  📄 feeds.conf 内容                  ║"
-        echo "╚══════════════════════════════════════╝"
-        cat feeds.conf 2>/dev/null || echo "feeds.conf 不存在"
-        echo ""
-
-    - name: Debug Print Chinese packages in config
-      run: |
-        cd openwrt
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  📄 .config 中的中文包配置           ║"
-        echo "╚══════════════════════════════════════╝"
-        grep -E "luci-i18n.*zh-cn" .config 2>/dev/null || echo "无中文包配置"
-        echo ""
-
-    - name: Force enable key packages
-      run: |
-        cd openwrt
-        enable_pkg() {
-          local pattern="$1"
-          if grep -q "^# CONFIG_PACKAGE_${pattern} is not set" .config; then
-            sed -i "s/^# CONFIG_PACKAGE_${pattern} is not set/CONFIG_PACKAGE_${pattern}=y/" .config
-            echo "  强制启用: $pattern"
-          elif grep -q "^CONFIG_PACKAGE_${pattern}=y" .config; then
-            echo "  已启用: $pattern"
-          else
-            echo "CONFIG_PACKAGE_${pattern}=y" >> .config
-            echo "  追加启用: $pattern"
-          fi
-        }
-        
-        echo "【强制启用 LuCI 核心依赖】"
-        enable_pkg "luci-base"
-        enable_pkg "luci-mod-admin-full"
-        enable_pkg "luci-mod-network"
-        enable_pkg "luci-mod-status"
-        enable_pkg "luci-mod-system"
-        enable_pkg "rpcd"
-        enable_pkg "rpcd-mod-file"
-        enable_pkg "rpcd-mod-iwinfo"
-        enable_pkg "rpcd-mod-rpcsys"
-        enable_pkg "rpcd-mod-rrdns"
-        enable_pkg "uhttpd"
-        enable_pkg "uhttpd-mod-ubus"
-        enable_pkg "cgi-io"
-        enable_pkg "ucode"
-        enable_pkg "ucode-mod-fs"
-        enable_pkg "ucode-mod-math"
-        enable_pkg "ucode-mod-nl80211"
-        enable_pkg "ucode-mod-resolv"
-        enable_pkg "ucode-mod-ubus"
-        enable_pkg "ucode-mod-uci"
-        enable_pkg "luci-theme-bootstrap"
-        
-        echo ""
-        echo "【强制启用中文语言包】"
-        enable_pkg "luci-i18n-base-zh-cn"
-        enable_pkg "luci-i18n-opkg-zh-cn"
-        enable_pkg "luci-i18n-firewall-zh-cn"
-        enable_pkg "luci-i18n-attendedsysupgrade-zh-cn"
-        enable_pkg "luci-i18n-wireguard-zh-cn"
-        enable_pkg "luci-i18n-upnp-zh-cn"
-        enable_pkg "luci-i18n-ddns-zh-cn"
-        enable_pkg "luci-i18n-sqm-zh-cn"
-        enable_pkg "luci-i18n-wol-zh-cn"
-        enable_pkg "luci-i18n-nft-qos-zh-cn"
-        enable_pkg "luci-i18n-ttyd-zh-cn"
-        enable_pkg "luci-i18n-ssr-plus-zh-cn"
-        enable_pkg "luci-i18n-cupsd-zh-cn"
-        enable_pkg "luci-i18n-adblock-zh-cn"
-        enable_pkg "luci-i18n-nlbwmon-zh-cn"
-        enable_pkg "luci-i18n-commands-zh-cn"
-        enable_pkg "luci-i18n-watchcat-zh-cn"
-        
-        echo ""
-        echo "【强制启用打印机驱动】"
-        enable_pkg "brlaser"
-        enable_pkg "hplip"
-        enable_pkg "gutenprint"
-        
-        echo ""
-        echo "【强制启用基础依赖】"
-        enable_pkg "liblcms2"
-        enable_pkg "zlib"
-        enable_pkg "libcups"
-        enable_pkg "libcupsimage"
-        enable_pkg "libpng"
-        enable_pkg "libjpeg"
-        enable_pkg "libstdcpp"
-        enable_pkg "libusb-1-0"
-        enable_pkg "libexpat"
-        enable_pkg "dbus"
-        enable_pkg "dbus-libs"
-        enable_pkg "libdaemon"
-        enable_pkg "libiwinfo"
-        enable_pkg "kmod-usb-printer"
-        
-        echo ""
-        echo "【强制启用核心功能包】"
-        enable_pkg "cups"
-        enable_pkg "cups-filters"
-        enable_pkg "cups-bjnp"
-        enable_pkg "ghostscript"
-        enable_pkg "avahi"
-        enable_pkg "avahi-dbus-daemon"
-        enable_pkg "luci-app-cupsd"
-        enable_pkg "ksmbd-server"
-        enable_pkg "ksmbd-utils"
-        enable_pkg "luci-app-ksmbd"
-        enable_pkg "luci-app-ssr-plus"
-        enable_pkg "luci-app-sqm"
-        enable_pkg "luci-app-upnp"
-        enable_pkg "luci-app-ddns"
-        enable_pkg "luci-app-wol"
-        enable_pkg "luci-proto-wireguard"
-        enable_pkg "vlmcsd"
-        enable_pkg "luci-app-vlmcsd"
-        enable_pkg "curl"
-        enable_pkg "libcurl"
-        enable_pkg "adblock"
-        enable_pkg "luci-app-adblock"
-        enable_pkg "nlbwmon"
-        enable_pkg "luci-app-nlbwmon"
-        enable_pkg "luci-app-commands"
-        enable_pkg "watchcat"
-        enable_pkg "luci-app-watchcat"
-        enable_pkg "luci-app-autoreboot"
-        
-        # 禁用有问题的包（mosdns Go 版本不兼容）
-        sed -i 's/^CONFIG_PACKAGE_mosdns=y/# CONFIG_PACKAGE_mosdns is not set/' .config
-        sed -i 's/^CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS=y/# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set/' .config
-        
-        # GRUB timeout
-        sed -i 's/CONFIG_GRUB_TIMEOUT=.*/CONFIG_GRUB_TIMEOUT=0/' .config
-        echo "CONFIG_GRUB_TIMEOUT=0" >> .config
-        echo "==========================="
-
-    - name: Debug Print all Chinese packages in config
-      run: |
-        cd openwrt
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  📋 .config 中所有中文包              ║"
-        echo "╚══════════════════════════════════════╝"
-        echo ""
-        grep "^CONFIG_PACKAGE_luci-i18n" .config | sed 's/^/  /' || echo "  (无中文包配置)"
-        echo ""
-
-    - name: Check Chinese packages in config
-      run: |
-        cd openwrt
-        
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  🔍 检查中文包是否写入 .config       ║"
-        echo "╚══════════════════════════════════════╝"
-        echo ""
-        
-        FAIL=0
-        
-        check_i18n_config() {
-          local pkg="$1"
-          if grep -q "^CONFIG_PACKAGE_${pkg}=y" .config 2>/dev/null; then
-            echo "  ✅ ${pkg}"
-            return 0
-          else
-            echo "  ❌ ${pkg} 未启用"
-            FAIL=1
-            return 1
-          fi
-        }
-        
-        check_i18n_config "luci-i18n-base-zh-cn"
-        check_i18n_config "luci-i18n-firewall-zh-cn"
-        check_i18n_config "luci-i18n-opkg-zh-cn"
-        
-        echo ""
-        
-        if [ "$FAIL" -eq 1 ]; then
-          echo "╔══════════════════════════════════════╗"
-          echo "║  ❌ 中文包未写入 .config              ║"
-          echo "║  编译将无法生成中文界面               ║"
-          echo "║  已终止编译                           ║"
-          echo "╚══════════════════════════════════════╝"
-          exit 1
-        else
-          echo "╔══════════════════════════════════════╗"
-          echo "║  ✅ 中文包已写入 .config              ║"
-          echo "║  固件将包含中文界面                   ║"
-          echo "╚══════════════════════════════════════╝"
-        fi
-
-    - name: Verify package requirements
-      run: |
-        cd openwrt
-        
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║  🔍 依赖链完整性检查                 ║"
-        echo "╚══════════════════════════════════════╝"
-        echo ""
-        
-        TOTAL=$(grep -c "^CONFIG_PACKAGE_.*=y" .config)
-        echo "  已解析的包总数: $TOTAL"
-        echo ""
-        
-        FAIL=0
-        
-        check_config() {
-          local name="$1"
-          local desc="${2:-}"
-          local required="${3:-yes}"
-          if grep -q "^CONFIG_PACKAGE_${name}=y" .config 2>/dev/null; then
-            echo "  ✅ $name ${desc:+($desc)}"
-            return 0
-          fi
-          if [ "$required" = "yes" ]; then
-            echo "  ❌ $name ${desc:+($desc)}"
-            FAIL=1
-          else
-            echo "  ⚠️  $name ${desc:+($desc)} - 可选"
-          fi
-          return 0
-        }
-        
-        echo "【LuCI 核心】"
-        check_config "luci-base"
-        check_config "luci-mod-admin-full"
-        check_config "rpcd"
-        check_config "rpcd-mod-file"
-        check_config "uhttpd"
-        check_config "luci-theme-bootstrap"
-        echo ""
-        echo "【CUPS 打印】"
-        check_config "cups"
-        check_config "cups-filters"
-        check_config "luci-app-cupsd"
-        check_config "avahi-dbus-daemon" "optional" "no"
-        echo ""
-        echo "【文件共享】"
-        check_config "ksmbd-server"
-        check_config "luci-app-ksmbd"
-        echo ""
-        echo "【网络工具】"
-        check_config "luci-app-ssr-plus"
-        check_config "luci-app-upnp"
-        check_config "luci-app-ddns"
-        check_config "luci-app-wol"
-        check_config "luci-app-adblock"
-        check_config "luci-app-nlbwmon"
-        check_config "luci-app-commands"
-        check_config "luci-app-watchcat"
-        echo ""
-        
-        if [ "$FAIL" -eq 1 ]; then
-          echo "╔══════════════════════════════════════╗"
-          echo "║  ❌ 检查失败                         ║"
-          echo "╚══════════════════════════════════════╝"
-          exit 1
-        else
-          echo "╔══════════════════════════════════════╗"
-          echo "║  ✅ 检查通过                         ║"
-          echo "║  核心功能就绪: $TOTAL 包             ║"
-          echo "╚══════════════════════════════════════╝"
-        fi
-
-    - name: Re-run defconfig to resolve dependencies
-      run: |
-        cd openwrt
-        make defconfig
-        echo "✅ defconfig 完成，依赖已解析"
-
-    - name: Debug - Check missing lib dependencies
-      run: |
-        cd openwrt
-        echo "=== 检查主包是否有对应的 lib 包 ==="
-        for pkg in curl dbus cups iwinfo expat; do
-          echo "--- $pkg ---"
-          grep "CONFIG_PACKAGE_${pkg}=y" .config || echo "  $pkg 未启用"
-          grep "CONFIG_PACKAGE_lib${pkg}=y" .config || echo "  ⚠️ lib${pkg} 未启用"
-        done
-
-    - name: Download packages
-      run: cd openwrt && make download -j8 || make download -j1 V=s
-
-    - name: Compile OpenWRT firmware
-      run: |
-        cd openwrt
-        # 先触发 brlaser 源码下载
-        make package/feeds/printing/brlaser/prepare V=s 2>&1 | tail -5
-        
-        # 删除 brlaser 测试目录（测试代码有 bug，不影响驱动功能）
-        BRLASER_DIR=$(find build_dir -type d -name "brlaser-*" 2>/dev/null | head -1)
-        if [ -n "$BRLASER_DIR" ]; then
-          rm -rf "$BRLASER_DIR/test"
-          echo "✅ brlaser test 目录已删除"
-        fi
-        
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) 2>&1 | tee build.log
-            if [ ${PIPESTATUS[0]} -ne 0 ]; then
-                echo "========== BUILD FAILED =========="
-                grep -E "error:|undefined reference|cannot find -l|fatal error" build.log | tail -50
-                exit 1
-            fi
-        fi
-        
+        make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+
+    - name: Check space usage
+      if: (!cancelled())
+      run: df -hT
+
+    - name: Upload bin directory
+      uses: actions/upload-artifact@main
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      with:
+        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: openwrt/bin
+
     - name: Organize files
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
@@ -507,30 +128,46 @@ jobs:
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
-    - name: Upload firmware to Artifacts
+
+    - name: Upload firmware directory
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
-        name: OpenWrt_Official_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
+
     - name: Generate release tag
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
-        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+        echo "release_tag=${{ env.RELEASE_TAG }}-$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+        touch release.txt
+        echo "OpenWrt 24.10 Official Stable Build" >> release.txt
+        echo "Build Date: $(date +"%Y-%m-%d %H:%M:%S")" >> release.txt
+        echo "Status: ${{ steps.compile.outputs.status }}" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
-    - name: Upload firmware to Release
+
+    - name: Upload firmware to release
       uses: softprops/action-gh-release@master
       if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        token: ${{ secrets.RELEASES_TOKEN }}
         tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
         files: ${{ env.FIRMWARE }}/*
+
+    - name: Delete workflow runs
+      uses: GitRML/delete-workflow-runs@main
+      with:
+        retain_days: 1
+        keep_minimum_runs: 3
+
     - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@master
+      uses: dev-drprasad/delete-older-releases@v0.3.3
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
-        keep_latest: 3
+        keep_latest: 5
         delete_tags: true
       env:
-        GITHUB_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
