@@ -79,10 +79,44 @@ jobs:
         make download -j8
         find dl -size -1024c -exec rm -f {} \;
 
+    # ============================================
+    # 新增：二次修复brlaser（编译前）
+    # ============================================
+    - name: Additional fix for brlaser
+      run: |
+        cd openwrt
+        # 运行之前创建的修复脚本
+        if [ -f /workdir/fix_brlaser.sh ]; then
+          echo "运行brlaser修复脚本..."
+          bash /workdir/fix_brlaser.sh
+        fi
+        
+        # 手动修复：在build_dir中直接修改文件
+        echo "手动修复brlaser源文件..."
+        find build_dir -name "tempfile.h" -path "*/brlaser-*/test/*" -exec sed -i '1i#include <cstdint>' {} \;
+        find build_dir -name "*.cc" -path "*/brlaser-*/test/*" -exec grep -l "vector.*uint8_t" {} \; | while read file; do
+          echo "修复: $file"
+          sed -i '1i#include <cstdint>' "$file"
+        done
+        
+        # 如果文件还未下载，标记为在编译时修复
+        echo "export FORCE_UNSAFE_CONFIGURE=1" >> ~/.bashrc
+
     - name: Compile the firmware
       id: compile
       run: |
         cd openwrt
+        
+        # 编译前再次确保修复
+        echo "=== 编译前最后检查 ==="
+        find build_dir -name "tempfile.h" -path "*/brlaser-*/test/*" 2>/dev/null | while read file; do
+          if ! grep -q "#include <cstdint>" "$file" 2>/dev/null; then
+            echo "修复文件: $file"
+            sed -i '1i#include <cstdint>' "$file"
+          fi
+        done
+        
+        # 开始编译
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
