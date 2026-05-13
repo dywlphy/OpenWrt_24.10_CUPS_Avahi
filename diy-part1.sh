@@ -20,7 +20,7 @@ echo "=========================================="
 # ============================================
 echo "[1/3] 配置feeds源..."
 
-# 清空并重新创建feeds.conf
+# 使用官方feeds + printing feed
 cat > feeds.conf << 'EOF'
 src-git packages https://github.com/openwrt/packages.git;openwrt-24.10
 src-git luci https://github.com/openwrt/luci.git;openwrt-24.10
@@ -37,7 +37,7 @@ echo ""
 echo "[3/3] OpenWrt版本信息:"
 echo "Branch: openwrt-24.10"
 echo "Target: Official Stable"
-echo "Extra: printing feed added"
+echo "Extra: printing feed added (brlaser and cups-bjnp disabled)"
 
 echo ""
 echo "=========================================="
