@@ -37,7 +37,7 @@ jobs:
           ecj java-propose-classpath libelf-dev libfuse-dev libjson-c-dev \
           liblzo2-dev liblzma-dev libzstd-dev quilt u-boot-tools \
           python3-dev python3-pyelftools python3-yaml ccache \
-          aria2 curl subversion cups libcups2-dev
+          aria2 curl subversion
         sudo apt-get clean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
@@ -79,52 +79,17 @@ jobs:
         make download -j8
         find dl -size -1024c -exec rm -f {} \;
 
-    # ============================================
-    # 新增：二次修复brlaser（编译前）
-    # ============================================
-    - name: Additional fix for brlaser
-      run: |
-        cd openwrt
-        # 运行之前创建的修复脚本
-        if [ -f /workdir/fix_brlaser.sh ]; then
-          echo "运行brlaser修复脚本..."
-          bash /workdir/fix_brlaser.sh
-        fi
-        
-        # 手动修复：在build_dir中直接修改文件
-        echo "手动修复brlaser源文件..."
-        find build_dir -name "tempfile.h" -path "*/brlaser-*/test/*" -exec sed -i '1i#include <cstdint>' {} \;
-        find build_dir -name "*.cc" -path "*/brlaser-*/test/*" -exec grep -l "vector.*uint8_t" {} \; | while read file; do
-          echo "修复: $file"
-          sed -i '1i#include <cstdint>' "$file"
-        done
-        
-        # 如果文件还未下载，标记为在编译时修复
-        echo "export FORCE_UNSAFE_CONFIGURE=1" >> ~/.bashrc
-
     - name: Compile the firmware
       id: compile
       run: |
         cd openwrt
-            bash /workdir/fix_brlaser_direct.sh
-    
-        # 清理brlaser的编译状态，强制重新编译
-        rm -rf build_dir/target-x86_64_musl/brlaser-1.0/.prepared_*
-        rm -rf build_dir/target-x86_64_musl/brlaser-1.0/.built*
-    
-        # 重新准备brlaser
-        make package/feeds/printing/brlaser/prepare V=s
-        # 编译前再次确保修复
-        echo "=== 编译前最后检查 ==="
-        find build_dir -name "tempfile.h" -path "*/brlaser-*/test/*" 2>/dev/null | while read file; do
-          if ! grep -q "#include <cstdint>" "$file" 2>/dev/null; then
-            echo "修复文件: $file"
-            sed -i '1i#include <cstdint>' "$file"
-          fi
-        done
+        
+        # 修复brlaser
+        bash /workdir/fix_brlaser.sh
         
         # 开始编译
         make -j$(nproc) || make -j1 || make -j1 V=s
+        
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
