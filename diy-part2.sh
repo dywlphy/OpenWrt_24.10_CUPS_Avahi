@@ -6,22 +6,22 @@ echo "diy-part2.sh - 更新feeds后的配置"
 echo "=========================================="
 
 # 1. 设置默认主机名
-echo "[1/4] 设置默认主机名..."
+echo "[1/6] 设置默认主机名..."
 sed -i 's/ImmortalWrt/OpenWrt/g' package/base-files/files/bin/config_generate 2>/dev/null || true
 sed -i 's/OpenWrt/OpenWrt-24.10/g' package/base-files/files/bin/config_generate 2>/dev/null || true
 
 # 2. 设置默认时区为上海
-echo "[2/4] 设置默认时区..."
+echo "[2/6] 设置默认时区..."
 sed -i "s/'UTC'/'CST-8'/g" package/base-files/files/bin/config_generate
 sed -i "/'CST-8'/a \\\t\tset system.@system[-1].zonename='Asia/Shanghai'" package/base-files/files/bin/config_generate
 
 # 3. 设置默认主题
-echo "[3/4] 设置默认主题为Material..."
+echo "[3/6] 设置默认主题为Material..."
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' package/feeds/luci/luci/Makefile 2>/dev/null || true
 
 # 4. 添加自定义banner
-echo "[4/4] 添加自定义banner..."
+echo "[4/6] 添加自定义banner..."
 cat > package/base-files/files/etc/banner << 'EOF'
   _______                     ________        __
  |       |.-----.-----.-----.|  |  |  |.----.|  |_
@@ -33,10 +33,94 @@ cat > package/base-files/files/etc/banner << 'EOF'
  -----------------------------------------------------
 EOF
 
+# 5. CUPS 汉化集成
+echo "[5/6] 集成CUPS中文汉化..."
+mkdir -p package/base-files/files/usr/share/cups/templates
+mkdir -p package/base-files/files/usr/share/cups/doc-root
+
+if [ -f "$GITHUB_WORKSPACE/CUPS-zh.zip" ]; then
+    unzip -o $GITHUB_WORKSPACE/CUPS-zh.zip -d /tmp/cups-zh
+    cp -r /tmp/cups-zh/CUPS-zh/CUPS-2.4.2/usr_share_cups_templates/* package/base-files/files/usr/share/cups/templates/
+    cp -r /tmp/cups-zh/CUPS-zh/CUPS-2.4.2/usr_share_cups_doc-root/* package/base-files/files/usr/share/cups/doc-root/
+    chmod -R 755 package/base-files/files/usr/share/cups/templates
+    chmod -R 755 package/base-files/files/usr/share/cups/doc-root
+    rm -rf /tmp/cups-zh
+    echo "CUPS汉化文件已集成"
+else
+    echo "警告: 未找到CUPS-zh.zip，跳过"
+fi
+
+# 6. CUPS 默认配置（启用Avahi）
+echo "[6/6] 配置CUPS默认设置..."
+mkdir -p package/base-files/files/etc/cups
+
+cat > package/base-files/files/etc/cups/cupsd.conf << 'EOF'
+# CUPS 配置文件 - OpenWrt 24.10
+# 启用网络打印和Avahi发现
+
+# 监听地址
+Listen *:631
+Listen /var/run/cups/cups.sock
+
+# 日志级别
+LogLevel warn
+AccessLog /var/log/cups/access_log
+ErrorLog /var/log/cups/error_log
+
+# 默认策略
+DefaultPolicy default
+
+# Web界面访问控制
+<Location />
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+# 管理界面
+<Location /admin>
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+<Location /admin/conf>
+  AuthType Default
+  Require user @SYSTEM
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+# 打印机共享
+<Location /printers>
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+# 启用Avahi/DNS-SD打印机发现
+Browsing On
+BrowseLocalProtocols dnssd
+EOF
+
+# Avahi 服务文件（让CUPS打印机被发现）
+mkdir -p package/base-files/files/etc/avahi/services
+cat > package/base-files/files/etc/avahi/services/cups.service << 'EOF'
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">CUPS 打印服务器 @ %h</name>
+  <service>
+    <type>_ipp._tcp</type>
+    <port>631</port>
+    <txt-record>txtvers=1</txt-record>
+    <txt-record>qtotal=1</txt-record>
+    <txt-record>rp=printers/</txt-record>
+  </service>
+</service-group>
+EOF
+
 echo "=========================================="
 echo "构建信息:"
 echo "  - OpenWrt版本: 24.10 Official Stable"
 echo "  - 目标平台: x86_64"
-echo "  - brlaser: 已禁用 (编译问题)"
-echo "  - cups-bjnp: 已禁用 (编译问题)"
+echo "  - 打印: CUPS + Avahi + 中文界面"
+echo "  - 网络: Tailscale/ACME/文件管理器/访问控制"
 echo "=========================================="
