@@ -93,6 +93,12 @@ jobs:
       uses: P3TERX/ssh2actions@v1.0.0
       if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh != 'false') || contains(github.event.action, 'ssh')
 
+    - name: Clean Go mod cache
+      run: |
+        cd openwrt
+        rm -rf dl/go-mod-cache
+        make package/tailscale/clean 2>/dev/null || true
+
     - name: Download package
       run: |
         cd openwrt
