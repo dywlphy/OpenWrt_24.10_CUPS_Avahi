@@ -20,12 +20,11 @@ echo "=========================================="
 # ============================================
 echo "[1/3] 配置feeds源..."
 
-# 使用官方feeds + printing feed + 第三方应用feed
+# 使用官方feeds + printing feed
 cat > feeds.conf << 'EOF'
 src-git packages https://github.com/openwrt/packages.git;openwrt-24.10
 src-git luci https://github.com/openwrt/luci.git;openwrt-24.10
 src-git printing https://github.com/dywlphy/openwrt-feed-printing.git;main
-src-git third_party https://github.com/chenmozhijin/turboacc.git
 EOF
 
 echo "[2/3] 当前feeds配置:"
@@ -38,7 +37,8 @@ echo ""
 echo "[3/3] OpenWrt版本信息:"
 echo "Branch: openwrt-24.10"
 echo "Target: Official Stable"
-echo "Extra: printing feed + turboacc feed"
+echo "Extra: printing feed"
+echo "功能: Avahi/Tailscale/ACME/文件管理器/CUPS-PDF/访问控制"
 
 echo ""
 echo "=========================================="
