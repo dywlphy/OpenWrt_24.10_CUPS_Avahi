@@ -53,6 +53,10 @@ else
     echo "警告: 未找到CUPS_2.3.1_zh_CN.zip，跳过"
 fi
 
+# 6. 设置GRUB等待时间为2秒
+echo "[6/6] 设置GRUB等待时间..."
+sed -i 's/set timeout=.*/set timeout=2/' package/base-files/files/boot/grub/grub.cfg 2>/dev/null || echo "set timeout=2" > package/base-files/files/boot/grub/grub.cfg
+
 # 6. CUPS 默认配置（启用Avahi）
 echo "[6/6] 配置CUPS默认设置..."
 mkdir -p package/base-files/files/etc/cups
