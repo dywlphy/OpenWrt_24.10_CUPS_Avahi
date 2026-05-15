@@ -25,6 +25,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@main
 
+    # 安装编译依赖
     - name: Initialization environment
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -45,12 +46,14 @@ jobs:
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
 
+    # 克隆OpenWrt源码
     - name: Clone source code
       working-directory: /workdir
       run: |
         git clone -b ${{ env.REPO_BRANCH }} --single-branch --depth 1 ${{ env.REPO_URL }} openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
+    # 缓存下载文件
     - name: Cache OpenWrt dl (downloads)
       uses: actions/cache@v4
       with:
@@ -60,12 +63,14 @@ jobs:
           openwrt-dl-${{ hashFiles('diy-part1.sh') }}-
           openwrt-dl-
 
+    # 配置第三方feeds源
     - name: Load custom feeds
       run: |
         chmod +x diy-part1.sh
         cd openwrt
         $GITHUB_WORKSPACE/diy-part1.sh
 
+    # 缓存编译目录
     - name: Cache OpenWrt build (staging_dir)
       uses: actions/cache@v4
       with:
@@ -77,12 +82,15 @@ jobs:
           openwrt-build-${{ hashFiles('config.txt') }}-
           openwrt-build-
 
+    # 更新feeds
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
+    # 安装feeds
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
+    # 加载自定义配置
     - name: Load custom configuration
       run: |
         [ -e config.txt ] && cp config.txt openwrt/.config
@@ -90,39 +98,42 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/diy-part2.sh
 
+    # SSH调试（可选）
     - name: SSH connection to Actions
       uses: P3TERX/ssh2actions@v1.0.0
       if: github.event.inputs.ssh == 'true'
 
+    # 清理Tailscale缓存
     - name: Clean Go mod cache
       run: |
         cd openwrt
         rm -rf dl/go-mod-cache
         make package/tailscale/clean 2>/dev/null || true
 
+    # 下载源码包 + defconfig
     - name: Download package
       run: |
         cd openwrt
         make defconfig
-        # 强制启用可能被defconfig禁用的包
-        echo "CONFIG_PACKAGE_cups-pdf=y" >> .config
-        echo "CONFIG_PACKAGE_frp=y" >> .config
+        # 强制禁用dnsmasq，使用dnsmasq-full（解决冲突）
+        sed -i 's/CONFIG_PACKAGE_dnsmasq=y/# CONFIG_PACKAGE_dnsmasq is not set/' .config
+        sed -i 's/CONFIG_PACKAGE_dnsmasq=m/# CONFIG_PACKAGE_dnsmasq is not set/' .config
         make defconfig
         make download -j8
         find dl -size -1024c -exec rm -f {} \;
 
+    # 编译固件
     - name: Compile the firmware
       id: compile
       run: |
         cd openwrt
-        
-        # 开始编译
         make -j$(nproc) || make -j1 || make -j1 V=s | tee build.log
         echo "status=success" >> "$GITHUB_OUTPUT"
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> "$GITHUB_ENV"
         echo "FILE_DATE=_$(date +%Y%m%d%H%M)" >> "$GITHUB_ENV"
 
+    # 上传固件
     - name: Upload firmware
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && !cancelled()
@@ -130,11 +141,12 @@ jobs:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: openwrt/bin/targets/*/*
 
+    # 创建Git标签
     - name: Create Tag
       if: steps.compile.outputs.status == 'success'
       run: |
         git config --local user.name "GitHub Actions"
         git config --local user.email "actions@github.com"
-        TAG_NAME="v24.10+Avahi+功能包-$(date +%Y%m%d)"
-        git tag -a "$TAG_NAME" -m "OpenWrt 24.10 含Avahi/Tailscale/ACME/文件管理器/CUPS-PDF/访问控制 $(date +%Y.%m.%d)"
+        TAG_NAME="v24.10-stable-$(date +%Y%m%d)"
+        git tag -a "$TAG_NAME" -m "OpenWrt 24.10 Stable Build $(date +%Y.%m.%d)"
         git push origin "$TAG_NAME"
