@@ -20,27 +20,6 @@ echo "[3/6] 设置默认主题为Material..."
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' package/feeds/luci/luci/Makefile 2>/dev/null || true
 
-# 4. 修复 glib2 编译问题（PassWall依赖）
-# 错误: Malformed value in machine file variable 'c_ld': lexer [@ld@]
-# 原因: meson 交叉编译模板缺少 @ld@ 占位符，或编译缓存残留
-# 修复: 检查并补全 meson 模板 + 清理 glib2 缓存
-echo "[4/5] 修复 glib2 meson 编译配置..."
-MESON_CROSS=$(find staging_dir/host/lib/meson -name "openwrt-cross.txt.in" 2>/dev/null | head -1)
-if [ -n "$MESON_CROSS" ]; then
-    if ! grep -q '@ld@' "$MESON_CROSS" 2>/dev/null; then
-        sed -i '/@nm@/a @ld@' "$MESON_CROSS" 2>/dev/null || true
-        echo "  - 已添加 @ld@ 到 meson 交叉编译模板"
-    else
-        echo "  - meson 模板已包含 @ld@，无需修改"
-    fi
-else
-    echo "  - meson 模板尚未生成（将在编译时自动处理）"
-fi
-# 清理 glib2 残留配置缓存（防止缓存冲突）
-rm -rf build_dir/target-*/glib-*/.configured_* 2>/dev/null || true
-rm -rf staging_dir/target-*/stamp/.glib2_* 2>/dev/null || true
-echo "  - glib2 缓存已清理"
-
 # 4. 添加自定义banner
 echo "[4/6] 添加自定义banner..."
 cat > package/base-files/files/etc/banner << 'EOF'
