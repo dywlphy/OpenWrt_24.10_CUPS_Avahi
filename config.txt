@@ -1,9 +1,11 @@
 #
 # OpenWrt 24.10 Official Stable Configuration
-# Target: x86_64 (通用x86_64平台)
+# Target: x86_64
 #
 
-# 目标平台配置 - x86_64
+# ============================================
+# 目标平台配置
+# ============================================
 CONFIG_TARGET_x86=y
 CONFIG_TARGET_x86_64=y
 CONFIG_TARGET_x86_64_DEVICE_generic=y
@@ -11,7 +13,7 @@ CONFIG_TARGET_x86_64_DEVICE_generic=y
 # 镜像格式
 CONFIG_TARGET_IMAGES_GZIP=y
 CONFIG_TARGET_KERNEL_PARTSIZE=16
-CONFIG_TARGET_ROOTFS_PARTSIZE=128
+CONFIG_TARGET_ROOTFS_PARTSIZE=256
 # CONFIG_TARGET_ROOTFS_EXT4FS is not set
 CONFIG_TARGET_ROOTFS_SQUASHFS=y
 CONFIG_GRUB_TIMEOUT=0
@@ -36,6 +38,7 @@ CONFIG_PACKAGE_dropbear=y
 CONFIG_PACKAGE_firewall4=y
 CONFIG_PACKAGE_fstools=y
 CONFIG_PACKAGE_ip6tables=y
+CONFIG_PACKAGE_iptables=y
 CONFIG_PACKAGE_kernel=y
 CONFIG_PACKAGE_kmod-ipt-offload=y
 CONFIG_PACKAGE_libc=y
@@ -65,11 +68,10 @@ CONFIG_PACKAGE_ip-full=y
 CONFIG_PACKAGE_ipset=y
 CONFIG_PACKAGE_iptables-mod-conntrack-extra=y
 CONFIG_PACKAGE_iptables-mod-ipopt=y
-CONFIG_PACKAGE_ip6tables=y
 CONFIG_PACKAGE_kmod-tcp-bbr=y
 
 # ============================================
-# 定时重启 - 使用系统计划任务(cron)替代
+# LuCI 中文基础包
 # ============================================
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 
@@ -134,7 +136,7 @@ CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
 CONFIG_PACKAGE_miniupnpd=y
 
 # ============================================
-# 性能监控
+# 性能监控 - collectd + htop
 # ============================================
 CONFIG_PACKAGE_luci-app-statistics=y
 CONFIG_PACKAGE_luci-i18n-statistics-zh-cn=y
@@ -170,24 +172,26 @@ CONFIG_PACKAGE_ghostscript=y
 CONFIG_PACKAGE_ghostscript-fonts-std=y
 
 # ============================================
-# 打印机驱动
+# 打印机驱动（brlaser/splix已禁用，编译问题）
 # ============================================
 # CONFIG_PACKAGE_brlaser is not set
 # CONFIG_PACKAGE_splix is not set
 
 # ============================================
-# 新增功能包
+# 上网时间控制 (timecontrol feed)
 # ============================================
-
-# 上网时间控制
 CONFIG_PACKAGE_luci-app-nft-timecontrol=y
 
+# ============================================
 # Tailscale 内网穿透
+# ============================================
 CONFIG_PACKAGE_luci-app-tailscale=y
 CONFIG_PACKAGE_luci-i18n-tailscale-zh-cn=y
 CONFIG_PACKAGE_tailscale=y
 
+# ============================================
 # ACME 自动证书
+# ============================================
 CONFIG_PACKAGE_luci-app-acme=y
 CONFIG_PACKAGE_luci-i18n-acme-zh-cn=y
 CONFIG_PACKAGE_acme=y
@@ -195,11 +199,15 @@ CONFIG_PACKAGE_acme-acmesh=y
 CONFIG_PACKAGE_acme-common=y
 CONFIG_PACKAGE_acme-deploy=y
 
+# ============================================
 # 文件管理器
+# ============================================
 CONFIG_PACKAGE_luci-app-filemanager=y
 CONFIG_PACKAGE_luci-i18n-filemanager-zh-cn=y
 
+# ============================================
 # CUPS PDF虚拟打印机
+# ============================================
 CONFIG_PACKAGE_cups-pdf=y
 
 # ============================================
@@ -292,6 +300,8 @@ CONFIG_PACKAGE_luci-i18n-sqm-zh-cn=y
 # ============================================
 CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_kmod-wireguard=y
+CONFIG_PACKAGE_luci-app-wireguard=y
+CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y
 CONFIG_PACKAGE_luci-proto-wireguard=y
 
 # ============================================
