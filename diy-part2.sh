@@ -24,6 +24,22 @@ echo "[3/6] 设置默认主题为Material..."
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' package/feeds/luci/luci/Makefile 2>/dev/null || true
 
+EOF
+# 5. GRUB超时：刷机后首次启动自动修改为2秒
+echo "[5/8] 配置GRUB首次启动自动修改..."
+mkdir -p package/base-files/files/etc/uci-defaults
+cat > package/base-files/files/etc/uci-defaults/99-grub-timeout << 'GRUBEOF'
+#!/bin/sh
+# 首次启动自动将GRUB等待时间改为2秒
+if [ -f /boot/grub/grub.cfg ]; then
+    sed -i 's/^set timeout=.*/set timeout=2/' /boot/grub/grub.cfg
+    echo "GRUB timeout 已设置为 2 秒"
+fi
+exit 0
+GRUBEOF
+chmod +x package/base-files/files/etc/uci-defaults/99-grub-timeout
+echo "  - GRUB uci-defaults脚本已创建"
+
 # 5. 创建 CUPS 中文汉化包
 echo "[5/6] 创建 CUPS 中文汉化包..."
 
@@ -133,6 +149,101 @@ $(eval $(call BuildPackage,cups-zh-cn))
 MAKEEOF
 
 echo "  - cups-zh-cn 包已创建"
+
+# 8. CUPS汉化 + 配置：uci-defaults脚本（首次启动执行）
+echo "[8/8] 创建CUPS uci-defaults脚本..."
+cat > package/base-files/files/etc/uci-defaults/98-cups-zh-cn << 'CUPSEOF'
+#!/bin/sh
+# 首次启动自动配置CUPS中文汉化和cupsd.conf
+
+# 1. 替换CUPS中文模板
+if [ -d /usr/share/cups/zh_CN ]; then
+    cp -rf /usr/share/cups/zh_CN/* /usr/share/cups/templates/
+    rm -rf /usr/share/cups/zh_CN
+    echo "CUPS中文模板已安装"
+fi
+
+# 2. 配置cupsd.conf（局域网访问 + Avahi发现）
+cat > /etc/cups/cupsd.conf << 'CONF'
+Listen *:631
+Listen /var/run/cups/cups.sock
+LogLevel warn
+AccessLog /var/log/cups/access_log
+ErrorLog /var/log/cups/error_log
+DefaultPolicy default
+
+<Location />
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+<Location /admin>
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+<Location /admin/conf>
+  AuthType Default
+  Require user @SYSTEM
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+<Location /printers>
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+Browsing On
+BrowseLocalProtocols dnssd
+CONF
+
+# 3. 配置Avahi服务（打印机发现）
+mkdir -p /etc/avahi/services
+cat > /etc/avahi/services/cups.service << 'AVAHI'
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">CUPS 打印服务器 @ %h</name>
+  <service>
+    <type>_ipp._tcp</type>
+    <port>631</port>
+    <txt-record>txtvers=1</txt-record>
+    <txt-record>qtotal=1</txt-record>
+    <txt-record>rp=printers/</txt-record>
+  </service>
+</service-group>
+AVAHI
+
+# 4. 重启服务
+[ -x /etc/init.d/avahi-daemon ] && /etc/init.d/avahi-daemon restart 2>/dev/null
+[ -x /etc/init.d/cupsd ] && /etc/init.d/cupsd restart 2>/dev/null
+
+echo "CUPS配置完成"
+exit 0
+CUPSEOF
+chmod +x package/base-files/files/etc/uci-defaults/98-cups-zh-cn
+echo "  - CUPS uci-defaults脚本已创建"
+
+# 配置防火墙规则（刷机后自动启用Full Cone NAT）
+mkdir -p package/base-files/files/etc
+cat >> package/base-files/files/etc/firewall.user << 'FWEOF'
+
+# Full Cone NAT 规则（刷机后自动生效）
+# 改善P2P连接、游戏联机、视频会议等
+iptables -t nat -A zone_wan_prerouting -j FULLCONENAT 2>/dev/null
+iptables -t nat -A zone_wan_postrouting -j FULLCONENAT 2>/dev/null
+FWEOF
+echo "  - 防火墙Full Cone NAT规则已配置"
+
+# 调试信息
+echo ""
+echo "  === 自定义包文件统计 ==="
+CUPS_COUNT=$(find package/cups-zh-cn/files/usr/share/cups/zh_CN/ -type f 2>/dev/null | wc -l)
+echo "  - CUPS汉化文件: $CUPS_COUNT 个"
+echo "  - fullconenat: $(test -d package/iptables-mod-fullconenat && echo '存在' || echo '不存在')"
+echo "  - GRUB uci-defaults: $(test -f package/base-files/files/etc/uci-defaults/99-grub-timeout && echo '存在' || echo '不存在')"
+echo "  - CUPS uci-defaults: $(test -f package/base-files/files/etc/uci-defaults/98-cups-zh-cn && echo '存在' || echo '不存在')"
 
 # 6. 添加自定义banner
 echo "[6/6] 添加自定义banner..."
