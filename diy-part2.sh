@@ -39,8 +39,8 @@ for zip_name in "CUPS_2.3.1_zh_CN.zip" "CUPS-zh.zip" "cups-zh-cn.zip"; do
   if [ -f "$GITHUB_WORKSPACE/$zip_name" ]; then
     echo "  找到 CUPS 中文包: $GITHUB_WORKSPACE/$zip_name"
     unzip -o "$GITHUB_WORKSPACE/$zip_name" -d /tmp/cups-zh 2>/dev/null
-	cp -r /tmp/cups-zh/CUPS-zh/CUPS-2.4.2/usr_share_cups_templates/* package/cups-zh-cn/files/usr/share/cups/zh_CN/ 2>/dev/null || true
-	cp -r /tmp/cups-zh/CUPS-zh/CUPS-2.4.2/usr_share_cups_doc-root/* package/cups-zh-cn/files/usr/share/cups/doc-root/ 2>/dev/null || true
+	cp -r /tmp/cups-zh/CUPS*/CUPS*/usr_share_cups_templates/* package/cups-zh-cn/files/usr/share/cups/zh_CN/ 2>/dev/null || true
+	cp -r /tmp/cups-zh/CUPS*/CUPS*/usr_share_cups_doc-root/* package/cups-zh-cn/files/usr/share/cups/doc-root/ 2>/dev/null || true
     rm -rf /tmp/cups-zh
     CUPS_ZH_FOUND=1
     echo "  - CUPS 中文模板已从仓库复制"
@@ -121,6 +121,8 @@ define Build/Compile
 endef
 
 define Package/cups-zh-cn/install
+	$(INSTALL_DIR) $(1)/usr/share/cups/templates
+	$(CP) ./files/usr/share/cups/zh_CN/* $(1)/usr/share/cups/templates/ 2>/dev/null || true
 	$(INSTALL_DIR) $(1)/usr/share/cups/zh_CN
 	$(CP) ./files/usr/share/cups/zh_CN/* $(1)/usr/share/cups/zh_CN/ 2>/dev/null || true
 	$(INSTALL_DIR) $(1)/usr/share/cups/doc-root
