@@ -20,12 +20,23 @@ sed -i "s/'UTC'/'CST-8'/g" package/base-files/files/bin/config_generate
 sed -i "/'CST-8'/a \\\t\tset system.@system[-1].zonename='Asia/Shanghai'" package/base-files/files/bin/config_generate
 
 # 3. 设置默认主题为Material
-echo "[3/6] 设置默认主题为Material..."
+echo "[3/7] 设置默认主题为Material..."
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' package/feeds/luci/luci/Makefile 2>/dev/null || true
 
+# 3.1 修复 timecontrol 菜单路径（24.10 没有 admin/control 父菜单）
+echo "[3.1/7] 修复 timecontrol 菜单路径..."
+TC_MENU=$(find package/feeds/timecontrol -name "luci-app-timecontrol.json" -path "*/menu.d/*" 2>/dev/null | head -1)
+if [ -n "$TC_MENU" ]; then
+  sed -i 's|"admin/control/|"admin/network/|g' "$TC_MENU"
+  echo "  - 已修复: $TC_MENU"
+  echo "  - 菜单位置: 网络 → Time Control"
+else
+  echo "  - 警告: 未找到 timecontrol 菜单配置文件"
+fi
+
 # 4. 创建 CUPS 中文汉化包
-echo "[4/6] 创建 CUPS 中文汉化包..."
+echo "[4/7] 创建 CUPS 中文汉化包..."
 
 # 创建包目录
 mkdir -p package/cups-zh-cn/files/usr/share/cups/templates
@@ -118,7 +129,7 @@ MAKEEOF
 echo "  - cups-zh-cn 包已创建"
 
 # 5. 创建 uci-defaults 脚本（首次启动执行）
-echo "[5/6] 创建 uci-defaults 脚本..."
+echo "[5/7] 创建 uci-defaults 脚本..."
 mkdir -p package/base-files/files/etc/uci-defaults
 
 # CUPS 汉化 + 配置
@@ -210,7 +221,7 @@ chmod +x package/base-files/files/etc/uci-defaults/99-grub-timeout
 echo "  - GRUB uci-defaults脚本已创建"
 
 # 6. 添加自定义banner
-echo "[6/6] 添加自定义banner..."
+echo "[6/7] 添加自定义banner..."
 cat > package/base-files/files/etc/banner << 'EOF'
   _______                     ________        __
  |       |.-----.-----.-----.|  |  |  |.----.|  |_

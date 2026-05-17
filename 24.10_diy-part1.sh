@@ -15,7 +15,8 @@ echo "[1/3] 配置feeds源..."
 cat > feeds.conf << 'EOF'
 src-git packages https://github.com/openwrt/packages.git;openwrt-24.10
 src-git luci https://github.com/openwrt/luci.git;openwrt-24.10
-src-git printing https://github.com/dywlphy/openwrt-feed-printing.git;main
+# 注意：printing feed 中的 brlaser/lcms2 在 GCC 13 下编译失败，暂时禁用
+# src-git printing https://github.com/dywlphy/openwrt-feed-printing.git;main
 src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol
 src-git frp https://github.com/kuoruan/openwrt-frp.git
 src-git luciappfrpc https://github.com/kuoruan/luci-app-frpc.git
