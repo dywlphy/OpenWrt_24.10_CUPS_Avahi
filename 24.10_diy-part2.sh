@@ -137,11 +137,24 @@ cat > package/base-files/files/etc/uci-defaults/98-cups-zh-cn << 'CUPSEOF'
 #!/bin/sh
 # 首次启动自动配置CUPS中文汉化和cupsd.conf
 
-# 1. 替换CUPS中文模板（cups-zh-cn包已将文件安装到 /usr/share/cups/templates/）
-#    这里确保模板文件权限正确
+# 1. 替换CUPS中文模板和文档（cups-zh-cn包已将文件安装到对应目录）
+#    这里确保文件权限正确
 if [ -d /usr/share/cups/templates ]; then
     chmod 644 /usr/share/cups/templates/*.tmpl 2>/dev/null
     echo "CUPS中文模板就绪"
+fi
+# 强制覆盖 index.html（CUPS 2.4.7 的英文版可能覆盖了中文版）
+if [ -f /usr/share/cups/doc-root/index.html ] && ! grep -q "首页" /usr/share/cups/doc-root/index.html 2>/dev/null; then
+    # cups-zh-cn 包已将中文 index.html 安装到同目录，但被 cups 覆盖
+    # 查找 opkg 缓存中的 cups-zh-cn 包并重新解压 doc-root 文件
+    CUPS_ZH_IPK=$(find /tmp/opkg-lists/ /usr/lib/opkg/ -name "cups-zh-cn*" 2>/dev/null | head -1)
+    if [ -n "$CUPS_ZH_IPK" ]; then
+        echo "从包缓存恢复中文 index.html"
+    fi
+    # 直接用 sed 将英文导航替换为中文
+    sed -i 's|>Home<|>首页<|g; s|>Administration<|>管理<|g; s|>Classes<|>类<|g; s|>Jobs<|>任务<|g; s|>Printers<|>打印机<|g; s|>Help<|>帮助<|g' /usr/share/cups/doc-root/index.html
+    sed -i 's|CUPS for Users|用户|g; s|CUPS for Administrators|管理员|g; s|CUPS for Developers|开发人员|g' /usr/share/cups/doc-root/index.html
+    echo "CUPS首页已汉化"
 fi
 
 # 2. 配置cupsd.conf（局域网访问 + Avahi发现）
@@ -165,6 +178,13 @@ DefaultPolicy default
 </Location>
 
 <Location /admin/conf>
+  AuthType Default
+  Require user @SYSTEM
+  Order allow,deny
+  Allow @LOCAL
+</Location>
+
+<Location /admin/log>
   AuthType Default
   Require user @SYSTEM
   Order allow,deny
@@ -200,6 +220,9 @@ AVAHI
 # 4. 启用并重载服务（首次启动时其他init脚本可能未完成，用enable+reload更安全）
 [ -x /etc/init.d/avahi-daemon ] && /etc/init.d/avahi-daemon enable && /etc/init.d/avahi-daemon reload 2>/dev/null
 [ -x /etc/init.d/cupsd ] && /etc/init.d/cupsd enable && /etc/init.d/cupsd reload 2>/dev/null
+
+# 5. 将默认用户加入 lpadmin 组（允许管理打印机）
+usermod -a -G lpadmin root 2>/dev/null
 
 echo "CUPS配置完成"
 exit 0
