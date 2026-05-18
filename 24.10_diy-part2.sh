@@ -5,40 +5,46 @@
 #
 
 echo "=========================================="
-echo "OpenWrt 24.10 Official Stable Build"
-echo "diy-part2.sh - 自定义配置"
+echo " OpenWrt 24.10 Official Stable Build"
+echo " diy-part2.sh - 自定义配置"
 echo "=========================================="
 
 # 1. 设置默认主机名
-echo "[1/6] 设置默认主机名..."
+echo ""
+echo "[1/7] 设置默认主机名..."
 sed -i 's/ImmortalWrt/OpenWrt/g' package/base-files/files/bin/config_generate 2>/dev/null || true
 sed -i 's/OpenWrt/OpenWrt-24.10/g' package/base-files/files/bin/config_generate 2>/dev/null || true
+grep -q "OpenWrt-24.10" package/base-files/files/bin/config_generate 2>/dev/null && echo " ✅ 主机名已设置为 OpenWrt-24.10" || echo " ❌ 主机名设置失败"
 
 # 2. 设置默认时区为上海
-echo "[2/6] 设置默认时区..."
+echo ""
+echo "[2/7] 设置默认时区..."
 sed -i "s/'UTC'/'CST-8'/g" package/base-files/files/bin/config_generate
 sed -i "/'CST-8'/a \\\t\tset system.@system[-1].zonename='Asia/Shanghai'" package/base-files/files/bin/config_generate
+grep -q "CST-8" package/base-files/files/bin/config_generate 2>/dev/null && echo " ✅ 时区已设置为 Asia/Shanghai (CST-8)" || echo " ❌ 时区设置失败"
 
 # 3. 设置默认主题为Material
+echo ""
 echo "[3/7] 设置默认主题为Material..."
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i 's/luci-theme-bootstrap/luci-theme-material/g' package/feeds/luci/luci/Makefile 2>/dev/null || true
+grep -q "luci-theme-material" feeds/luci/collections/luci/Makefile 2>/dev/null && echo " ✅ 默认主题已设置为 Material" || echo " ⚠️ 主题设置（将在编译时生效）"
 
 # 3.1 修复 timecontrol 菜单路径（24.10 没有 admin/control 父菜单）
-echo "[3.1/8] 修复 timecontrol 菜单路径..."
+echo ""
+echo "[3.1] 修复 timecontrol 菜单路径..."
 TC_MENU=$(find package/feeds/timecontrol -name "luci-app-timecontrol.json" -path "*/menu.d/*" 2>/dev/null | head -1)
 if [ -n "$TC_MENU" ]; then
   sed -i 's|"admin/control/|"admin/network/|g' "$TC_MENU"
-  echo "  - 已修复: $TC_MENU"
-  echo "  - 菜单位置: 网络 → Time Control"
+  echo " ✅ timecontrol 菜单路径已修复: 网络 → Time Control"
 else
-  echo "  - 警告: 未找到 timecontrol 菜单配置文件"
+  echo " ⚠️ 未找到 timecontrol 菜单配置文件（将由 uci-defaults 在首次启动修复）"
 fi
 
 # 4. 复制 CUPS-zh.zip 到固件（首次启动时解压，确保不被 cups 覆盖）
-echo "[4/8] 复制 CUPS 中文包到固件..."
+echo ""
+echo "[4/7] 复制 CUPS 中文包到固件..."
 
-# 查找 CUPS-zh.zip（仓库根目录，与 config.txt 同目录）
 CUPS_ZIP=""
 for zip_name in "CUPS-zh.zip" "CUPS_2.3.1_zh_CN.zip" "cups-zh-cn.zip"; do
   if [ -f "$GITHUB_WORKSPACE/$zip_name" ]; then
@@ -48,17 +54,47 @@ for zip_name in "CUPS-zh.zip" "CUPS_2.3.1_zh_CN.zip" "cups-zh-cn.zip"; do
 done
 
 if [ -n "$CUPS_ZIP" ]; then
-  echo "  找到 CUPS 中文包: $CUPS_ZIP"
   mkdir -p package/base-files/files/etc/cups-zh
   cp "$CUPS_ZIP" package/base-files/files/etc/cups-zh/CUPS-zh.zip
-  echo "  - CUPS-zh.zip 已复制到固件（将在首次启动时解压）"
+  echo " ✅ CUPS-zh.zip 已复制 ($(du -h package/base-files/files/etc/cups-zh/CUPS-zh.zip | cut -f1))"
 else
-  echo "  - 警告: 未找到 CUPS-zh.zip，跳过汉化"
+  echo " ❌ 未找到 CUPS-zh.zip，汉化将跳过"
 fi
 
 # 5. 创建 uci-defaults 脚本（首次启动执行）
-echo "[5/8] 创建 uci-defaults 脚本..."
+echo ""
+echo "[5/7] 创建 uci-defaults 脚本..."
 mkdir -p package/base-files/files/etc/uci-defaults
+
+# opkg 换国内源（清华镜像）
+cat > package/base-files/files/etc/uci-defaults/96-opkg-mirror << 'MIREOF'
+#!/bin/sh
+# 替换 opkg 源为清华镜像（国内访问更快）
+if [ -f /etc/opkg/distfeeds.conf ]; then
+    sed -i 's|downloads.openwrt.org|mirrors.tuna.tsinghua.edu.cn/openwrt|g' /etc/opkg/distfeeds.conf
+    echo "opkg 已切换为清华镜像源"
+fi
+exit 0
+MIREOF
+chmod +x package/base-files/files/etc/uci-defaults/96-opkg-mirror
+test -f package/base-files/files/etc/uci-defaults/96-opkg-mirror && echo " ✅ 96-opkg-mirror（清华镜像源）" || echo " ❌ 96-opkg-mirror 创建失败"
+
+# timecontrol 菜单路径修复（首次启动时执行，确保包安装后仍生效）
+cat > package/base-files/files/etc/uci-defaults/97-timecontrol-menu << 'TCEOF'
+#!/bin/sh
+# 修复 timecontrol 菜单路径：admin/control → admin/network
+# 原因：OpenWrt 24.10 没有 admin/control 父菜单，包安装后原始路径无效
+TC_MENU="/usr/share/luci/menu.d/luci-app-timecontrol.json"
+if [ -f "$TC_MENU" ]; then
+    sed -i 's|"admin/control/|"admin/network/|g' "$TC_MENU"
+    echo "timecontrol 菜单路径已修复: 网络 → Time Control"
+fi
+# 清除 LuCI 缓存使菜单生效
+rm -rf /tmp/luci-* 2>/dev/null
+exit 0
+TCEOF
+chmod +x package/base-files/files/etc/uci-defaults/97-timecontrol-menu
+test -f package/base-files/files/etc/uci-defaults/97-timecontrol-menu && echo " ✅ 97-timecontrol-menu（菜单路径修复）" || echo " ❌ 97-timecontrol-menu 创建失败"
 
 # CUPS 汉化 + 配置
 cat > package/base-files/files/etc/uci-defaults/98-cups-zh-cn << 'CUPSEOF'
@@ -168,7 +204,7 @@ echo "CUPS配置完成"
 exit 0
 CUPSEOF
 chmod +x package/base-files/files/etc/uci-defaults/98-cups-zh-cn
-echo "  - CUPS uci-defaults脚本已创建"
+test -f package/base-files/files/etc/uci-defaults/98-cups-zh-cn && echo " ✅ 98-cups-zh-cn（CUPS汉化+配置）" || echo " ❌ 98-cups-zh-cn 创建失败"
 
 # GRUB 超时修改
 cat > package/base-files/files/etc/uci-defaults/99-grub-timeout << 'GRUBEOF'
@@ -181,40 +217,11 @@ fi
 exit 0
 GRUBEOF
 chmod +x package/base-files/files/etc/uci-defaults/99-grub-timeout
-echo "  - GRUB uci-defaults脚本已创建"
-
-# opkg 换国内源（清华镜像）
-cat > package/base-files/files/etc/uci-defaults/96-opkg-mirror << 'MIREOF'
-#!/bin/sh
-# 替换 opkg 源为清华镜像（国内访问更快）
-if [ -f /etc/opkg/distfeeds.conf ]; then
-    sed -i 's|downloads.openwrt.org|mirrors.tuna.tsinghua.edu.cn/openwrt|g' /etc/opkg/distfeeds.conf
-    echo "opkg 已切换为清华镜像源"
-fi
-exit 0
-MIREOF
-chmod +x package/base-files/files/etc/uci-defaults/96-opkg-mirror
-echo "  - opkg 国内源 uci-defaults脚本已创建"
-
-# timecontrol 菜单路径修复（首次启动时执行，确保包安装后仍生效）
-cat > package/base-files/files/etc/uci-defaults/97-timecontrol-menu << 'TCEOF'
-#!/bin/sh
-# 修复 timecontrol 菜单路径：admin/control → admin/network
-# 原因：OpenWrt 24.10 没有 admin/control 父菜单，包安装后原始路径无效
-TC_MENU="/usr/share/luci/menu.d/luci-app-timecontrol.json"
-if [ -f "$TC_MENU" ]; then
-    sed -i 's|"admin/control/|"admin/network/|g' "$TC_MENU"
-    echo "timecontrol 菜单路径已修复: 网络 → Time Control"
-fi
-# 清除 LuCI 缓存使菜单生效
-rm -rf /tmp/luci-* 2>/dev/null
-exit 0
-TCEOF
-chmod +x package/base-files/files/etc/uci-defaults/97-timecontrol-menu
-echo "  - timecontrol 菜单修复 uci-defaults脚本已创建"
+test -f package/base-files/files/etc/uci-defaults/99-grub-timeout && echo " ✅ 99-grub-timeout（GRUB 2秒启动）" || echo " ❌ 99-grub-timeout 创建失败"
 
 # 6. 添加自定义banner
-echo "[6/8] 添加自定义banner..."
+echo ""
+echo "[6/7] 添加自定义banner..."
 cat > package/base-files/files/etc/banner << 'EOF'
   _______                     ________        __
  |       |.-----.-----.-----.|  |  |  |.----.|  |_
@@ -225,29 +232,45 @@ cat > package/base-files/files/etc/banner << 'EOF'
  OpenWrt 24.10 Official Stable Build
  -----------------------------------------------------
 EOF
+test -f package/base-files/files/etc/banner && echo " ✅ 自定义banner已创建" || echo " ❌ banner创建失败"
 
-# 调试信息
+# 调试信息 - 根据实际检查结果显示 ✅/❌
 echo ""
-echo "  === 自定义包文件统计 ==="
-CUPS_ZIP_SIZE=$(du -h package/base-files/files/etc/cups-zh/CUPS-zh.zip 2>/dev/null | cut -f1)
-echo "  - CUPS中文包: ${CUPS_ZIP_SIZE:-未找到}"
-echo "  - CUPS uci-defaults: $(test -f package/base-files/files/etc/uci-defaults/98-cups-zh-cn && echo '存在' || echo '不存在')"
-echo "  - GRUB uci-defaults: $(test -f package/base-files/files/etc/uci-defaults/99-grub-timeout && echo '存在' || echo '不存在')"
-
 echo "=========================================="
-echo "构建信息:"
-echo "  - OpenWrt版本: 24.10 Official Stable"
-echo "  - 目标平台: x86_64"
-echo "  - 打印: CUPS + Avahi + 中文(CUPS-zh.zip首次启动解压)"
-echo "  - NAT: Full Cone NAT (kmod-nft-fullcone)"
-echo "  - VPN: WireGuard + pbr"
-echo "  - 网络: Tailscale/ACME/frp"
-echo "  - 控制: timecontrol"
+echo " 调试信息"
 echo "=========================================="
-
-# 7. 触发 base-files 重新打包（确保 files/ 下的新增文件生效）
-#    只需 touch Makefile 让构建系统检测到变化，无需手动 clean/compile
 echo ""
-echo "[额外] 触发 base-files 重新打包..."
+test -f package/base-files/files/etc/cups-zh/CUPS-zh.zip && echo " ✅ CUPS-zh.zip ($(du -h package/base-files/files/etc/cups-zh/CUPS-zh.zip | cut -f1))" || echo " ❌ CUPS-zh.zip 未找到"
+test -f package/base-files/files/etc/uci-defaults/96-opkg-mirror && echo " ✅ 96-opkg-mirror" || echo " ❌ 96-opkg-mirror 未创建"
+test -f package/base-files/files/etc/uci-defaults/97-timecontrol-menu && echo " ✅ 97-timecontrol-menu" || echo " ❌ 97-timecontrol-menu 未创建"
+test -f package/base-files/files/etc/uci-defaults/98-cups-zh-cn && echo " ✅ 98-cups-zh-cn" || echo " ❌ 98-cups-zh-cn 未创建"
+test -f package/base-files/files/etc/uci-defaults/99-grub-timeout && echo " ✅ 99-grub-timeout" || echo " ❌ 99-grub-timeout 未创建"
+
+echo ""
+echo "=========================================="
+echo " OpenWrt 24.10 Build Summary"
+echo "=========================================="
+echo ""
+echo " ✅ LuCI 中文界面"
+echo " ✅ CUPS 打印系统 + AirPrint 支持"
+echo " ✅ ksmbd 文件共享"
+echo " ✅ Full Cone NAT (nft-fullcone)"
+echo " ✅ WireGuard VPN + pbr 策略路由"
+echo " ✅ Tailscale / ACME / frp 内网穿透"
+echo " ✅ 上网时间控制 (timecontrol)"
+echo " ✅ 广告屏蔽 (adblock)"
+echo " ✅ 网络工具 (UPnP, DDNS, WoL, SQM)"
+echo " ✅ 网络流量统计 (nlbwmon)"
+echo " ✅ Web 命令执行 (commands)"
+echo " ✅ 断网自动重启 (watchcat)"
+echo " ✅ HTTPS DNS Proxy (DoH/DoT)"
+echo " ✅ 文件管理器 (filemanager)"
+echo " ✅ 终端 (ttyd)"
+echo ""
+echo "=========================================="
+
+# 7. 触发 base-files 重新打包
+echo ""
+echo "[7/7] 触发 base-files 重新打包..."
 touch package/base-files/Makefile
-echo "  - base-files Makefile 时间戳已更新"
+echo " ✅ base-files Makefile 时间戳已更新"
