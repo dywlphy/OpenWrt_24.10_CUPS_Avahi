@@ -273,11 +273,6 @@ cat > package/base-files/files/etc/banner << 'EOF'
  -----------------------------------------------------
 EOF
 
-
-cd openwrt
-git clone --depth 1 https://github.com/f8q8/luci-app-autoreboot.git package/luci-app-autoreboot
-
-
 # 调试信息
 echo ""
 echo "  === 自定义包文件统计 ==="
