@@ -76,6 +76,22 @@ else
     echo " ❌ 未找到 CUPS Makefile，NLS 未启用"
 fi
 
+# 4. Patch CUPS 编译配置，启用中文语言支持
+echo ""
+echo "[4/7] Patch CUPS 编译配置..."
+CUPS_MAKEFILE=$(find package/feeds/printing -name "Makefile" -path "*/cups/Makefile" 2>/dev/null | head -1)
+if [ -n "$CUPS_MAKEFILE" ]; then
+  # --with-languages= （空值）禁用了所有语言，改为 zh_CN 启用中文
+  sed -i 's|--with-languages= \\|--with-languages=zh_CN \\|' "$CUPS_MAKEFILE"
+  # 添加 libintl-full 依赖到 cups 包
+  sed -i 's|DEPENDS:=+libcups +libusb-1.0 +libstdcpp +libubox +libubus +umdns|DEPENDS:=+libcups +libusb-1.0 +libstdcpp +libubox +libubus +umdns +libintl-full|' "$CUPS_MAKEFILE"
+  # 在 CONFIGURE_VARS 中添加 libintl
+  sed -i 's|LIBS="$(TARGET_LDFLAGS) -lz -lpng -ljpeg -lubus -lubox"|LIBS="$(TARGET_LDFLAGS) -lz -lpng -ljpeg -lubus -lubox -lintl"|' "$CUPS_MAKEFILE"
+  echo " ✅ CUPS Makefile 已 patch（--with-languages=zh_CN + libintl）"
+else
+  echo " ⚠️ 未找到 CUPS Makefile，跳过 patch"
+fi
+
 # ============================================
 # 4. 复制 CUPS 汉化资源到固件
 # ============================================
