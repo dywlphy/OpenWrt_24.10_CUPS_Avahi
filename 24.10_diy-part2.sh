@@ -86,7 +86,7 @@ CUPS_MAKEFILE=$(find feeds -name Makefile -path '*/cups/Makefile' 2>/dev/null | 
 if [ -n "$CUPS_MAKEFILE" ]; then
     echo " 📋 找到 CUPS Makefile: $CUPS_MAKEFILE"
 
-    # --- 3.2.1 启用 NLS（gettext 国际化支持） ---
+    # --- 3.3.1 启用 NLS（gettext 国际化支持） ---
     # 替换 --disable-nls 为 --enable-nls（如果存在）
     sed -i 's/--disable-nls/--enable-nls/' "$CUPS_MAKEFILE" 2>/dev/null || true
 
