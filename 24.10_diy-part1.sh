@@ -1,38 +1,22 @@
 #!/bin/bash
-#
-# diy-part1.sh - 配置feeds源（在Update feeds之前执行）
-# OpenWrt 24.10 版本
-#
 
 echo "=========================================="
-echo "OpenWrt 24.10 Official Stable Build"
-echo "diy-part1.sh - 配置feeds源"
+echo "diy-part1.sh - feeds配置"
 echo "=========================================="
 
-# 配置feeds源
-echo "[1/3] 配置feeds源..."
-
+# 1. 写入 feeds.conf
 cat > feeds.conf << 'EOF'
 src-git packages https://github.com/openwrt/packages.git;openwrt-24.10
 src-git luci https://github.com/openwrt/luci.git;openwrt-24.10
-src-git printing https://github.com/dywlphy/openwrt-feed-printing.git;main
-src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol
-src-git frp https://github.com/kuoruan/openwrt-frp.git
-src-git luciappfrpc https://github.com/kuoruan/luci-app-frpc.git
-src-git tailscale https://github.com/tokisaki-galaxy/luci-app-tailscale-community.git
-src-git passwall_packages https://github.com/dywlphy/openwrt-passwall-packages.git;main
-src-git passwall2 https://github.com/dywlphy/openwrt-passwall2.git;main
+src-git routing https://github.com/openwrt/routing.git;openwrt-24.10
+src-git telephony https://github.com/openwrt/telephony.git;openwrt-24.10
+src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol.git
+src-git frp https://github.com/kuoruan/luci-app-frpc.git
+src-git tailscale https://github.com/Tokisaki-Galaxy/luci-app-tailscale-community.git
+src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main
 EOF
 
-echo "[2/3] 当前feeds配置:"
+echo "feeds配置完成："
 cat feeds.conf
-
 echo ""
-echo "[3/3] OpenWrt版本信息:"
-echo "Branch: openwrt-24.10"
-echo "Target: Official Stable"
-
-echo ""
-echo "=========================================="
-echo "diy-part1.sh 执行完成"
 echo "=========================================="
