@@ -136,8 +136,6 @@ jobs:
           files: openwrt/release/*
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 同时上传到 Artifact（备用）
       - name: Upload firmware artifact
