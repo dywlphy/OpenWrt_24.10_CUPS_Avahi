@@ -40,6 +40,14 @@ echo " 主题: Bootstrap（默认）"
 echo "[4/6] 创建启动脚本..."
 mkdir -p package/base-files/files/etc/uci-defaults
 
+# 预置 OpenClash 配置（脱敏：不含密码/订阅/认证）
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/openclash.conf" ]; then
+    mkdir -p package/base-files/files/etc/config
+    cp "$SCRIPT_DIR/openclash.conf" package/base-files/files/etc/config/openclash
+    echo " OpenClash 配置已预置"
+fi
+
 # opkg镜像源 + 开启流量卸载（flow offload）
 cat > package/base-files/files/etc/uci-defaults/96-opkg-mirror << 'EOF'
 #!/bin/sh
@@ -81,8 +89,19 @@ fi
 /etc/init.d/rpcd enable
 # 等待 rpcd 完全启动
 sleep 2
-# 预热 LuCI 缓存，避免首次登录转圈
-/usr/libexec/luci-index-cache 2>/dev/null || true
+# 预热 LuCI 缓存，避免首次登录转圈（多种方式兼容）
+# 方法1: 使用 build_index.lua（OpenWrt 24.10）
+if [ -f /usr/share/luci/build_index.lua ]; then
+    lua /usr/share/luci/build_index.lua 2>/dev/null || true
+fi
+# 方法2: 使用 luci-index-cache（旧版本）
+if [ -x /usr/libexec/luci-index-cache ]; then
+    /usr/libexec/luci-index-cache 2>/dev/null || true
+fi
+# 方法3: 直接访问 LuCI 触发缓存生成
+curl -s http://127.0.0.1/cgi-bin/luci > /dev/null 2>&1 || true
+# 标记缓存有效
+touch /tmp/.luci-cache-valid 2>/dev/null || true
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-luci-fix
