@@ -3,6 +3,9 @@ name: OpenWrt 24.10 Cloud Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write   # 添加这一行，允许创建 Release
+
 env:
   OPENWRT_VERSION: openwrt-24.10
 
@@ -96,12 +99,13 @@ jobs:
           cp bin/targets/x86/64/*.sha256sums release/ 2>/dev/null || true
 
       # 上传固件到 GitHub Release
+      # 上传固件到 GitHub Release
       - name: Upload to GitHub Release
         if: steps.compile.outputs.status == 'success'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v24.10-${{ env.FILE_DATE }}
-          name: OpenWrt 24.10 Stable ${{ env.FILE_DATE }}
+          tag_name: v24.10-x86-${{ env.FILE_DATE }}
+          name: OpenWrt 24.10 x86_64 ${{ env.FILE_DATE }}
           body: |
             ## OpenWrt 24.10 Official Stable Build
 
@@ -136,7 +140,9 @@ jobs:
           files: openwrt/release/*
           draft: false
           prerelease: false
-
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
       # 同时上传到 Artifact（备用）
       - name: Upload firmware artifact
         uses: actions/upload-artifact@main
