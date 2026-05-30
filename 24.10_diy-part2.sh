@@ -109,10 +109,46 @@ chmod +x package/base-files/files/etc/uci-defaults/99-set-password
 # 禁用不需要默认启动的服务（按需手动开启）
 cat > package/base-files/files/etc/uci-defaults/100-disable-services << 'EOF'
 #!/bin/sh
-/etc/init.d/ddns disable        2>/dev/null
-/etc/init.d/adblock disable      2>/dev/null
-/etc/init.d/frpc disable        2>/dev/null
-/etc/init.d/frps disable        2>/dev/null
+# 代理相关（与 OpenClash 功能重叠或冲突）
+/etc/init.d/https-dns-proxy disable  2>/dev/null
+/etc/init.d/nikki disable           2>/dev/null
+/etc/init.d/openclash disable       2>/dev/null
+
+# VPN 相关（按需启用）
+/etc/init.d/tailscale disable       2>/dev/null
+/etc/init.d/tailscale-settings disable  2>/dev/null
+/etc/init.d/pbr disable             2>/dev/null
+
+# 网络工具（按需启用）
+/etc/init.d/miniupnpd disable       2>/dev/null
+/etc/init.d/socat disable           2>/dev/null
+/etc/init.d/sqm disable             2>/dev/null
+/etc/init.d/watchcat disable        2>/dev/null
+/etc/init.d/etherwake disable       2>/dev/null
+
+# 文件共享（按需启用）
+/etc/init.d/ksmbd disable           2>/dev/null
+/etc/init.d/wsdd2 disable           2>/dev/null
+
+# SSL证书（按需启用）
+/etc/init.d/acme disable            2>/dev/null
+
+# 监控统计（按需启用，占用资源）
+/etc/init.d/collectd disable        2>/dev/null
+/etc/init.d/luci_statistics disable 2>/dev/null
+/etc/init.d/nlbwmon disable         2>/dev/null
+
+# 时间同步（已有 sysntpd）
+/etc/init.d/chronyd disable         2>/dev/null
+
+# 硬件传感器（x86 一般不需要）
+/etc/init.d/lm-sensors disable      2>/dev/null
+
+# 其他（已在前面禁用）
+/etc/init.d/ddns disable            2>/dev/null
+/etc/init.d/adblock disable         2>/dev/null
+/etc/init.d/frpc disable            2>/dev/null
+/etc/init.d/frps disable            2>/dev/null
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/100-disable-services
@@ -128,7 +164,7 @@ cat > package/base-files/files/etc/banner << 'EOF'
  |_______||   __|_____|__|__||________||__|  |____|
           |__| W I R E L E S S   F R E E D O M
  -----------------------------------------------------
- OpenWrt 24.10 Official Stable Build
+ OpenWrt 24.10 Cloud Build
  -----------------------------------------------------
 EOF
 
