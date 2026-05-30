@@ -9,7 +9,7 @@ echo "diy-part2.sh - 自定义配置"
 echo "=========================================="
 
 # 设置主机名（先还原再替换，避免重复拼接）
-echo "[1/6] 设置主机名..."
+echo "[1/8] 设置主机名..."
 CONFIG_FILE="package/base-files/files/bin/config_generate"
 if [ -f "$CONFIG_FILE" ]; then
     sed -i 's/ImmortalWrt/OpenWrt/g' "$CONFIG_FILE"
@@ -22,7 +22,7 @@ fi
 echo " 主机名: OpenWrt-24.10"
 
 # 设置时区
-echo "[2/6] 设置时区..."
+echo "[2/8] 设置时区..."
 if [ -f "$CONFIG_FILE" ]; then
     sed -i "s/'UTC'/'CST-8'/g" "$CONFIG_FILE"
     sed -i '/set system.@system[-1].zonename/d' "$CONFIG_FILE"
@@ -33,20 +33,12 @@ fi
 echo " 时区: Asia/Shanghai (CST-8)"
 
 # 设置默认主题（bootstrap是默认主题，无需修改）
-echo "[3/6] 设置默认主题..."
+echo "[3/8] 设置默认主题..."
 echo " 主题: Bootstrap（默认）"
 
 # 创建uci-defaults脚本
-echo "[4/6] 创建启动脚本..."
+echo "[4/8] 创建启动脚本..."
 mkdir -p package/base-files/files/etc/uci-defaults
-
-# 预置 OpenClash 配置（脱敏：不含密码/订阅/认证）
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -f "$SCRIPT_DIR/openclash.conf" ]; then
-    mkdir -p package/base-files/files/etc/config
-    cp "$SCRIPT_DIR/openclash.conf" package/base-files/files/etc/config/openclash
-    echo " OpenClash 配置已预置"
-fi
 
 # opkg镜像源 + 开启流量卸载（flow offload）
 cat > package/base-files/files/etc/uci-defaults/96-opkg-mirror << 'EOF'
@@ -128,7 +120,7 @@ chmod +x package/base-files/files/etc/uci-defaults/100-disable-services
 echo " uci-defaults已创建"
 
 # 自定义banner
-echo "[5/6] 自定义banner..."
+echo "[5/8] 自定义banner..."
 cat > package/base-files/files/etc/banner << 'EOF'
   _______                     ________        __
  |       |.-----.-----.-----.|  |  |  |.----.|  |_
@@ -136,17 +128,17 @@ cat > package/base-files/files/etc/banner << 'EOF'
  |_______||   __|_____|__|__||________||__|  |____|
           |__| W I R E L E S S   F R E E D O M
  -----------------------------------------------------
- OpenWrt 24.10 Cloud Build
+ OpenWrt 24.10 Official Stable Build
  -----------------------------------------------------
 EOF
 
 # 修复 missing-macros 缺少 bin 目录的问题（tmpfs重启后必现）
-echo "[6/6] 修复 missing-macros..."
+echo "[6/8] 修复 missing-macros..."
 mkdir -p tools/missing-macros/src/bin
 touch tools/missing-macros/src/bin/.placeholder
 
 # 拉取 OpenClash（git_sparse_clone 是 Makefile 函数，只能用普通 git）
-echo "[7/6] 拉取 OpenClash..."
+echo "[7/8] 拉取 OpenClash..."
 if [ ! -d "package/luci-app-openclash" ]; then
     git clone --depth 1 --filter=blob:none --sparse https://github.com/kenzok8/small-package.git openclash-tmp
     cd openclash-tmp
@@ -160,7 +152,7 @@ else
 fi
 
 # 预下载 OpenClash 核心（解决国内无法下载问题）
-echo "[8/6] 预下载 OpenClash 核心..."
+echo "[8/8] 预下载 OpenClash 核心..."
 CORE_FILE="clash-linux-amd64.tar.gz"
 CORE_URL="https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-amd64.tar.gz"
 # 核心放到 base-files 才能打包进固件
