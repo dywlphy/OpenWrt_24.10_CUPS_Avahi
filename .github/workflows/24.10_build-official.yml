@@ -92,7 +92,7 @@ jobs:
         run: |
           cd openwrt
           mkdir -p release
-          cp bin/targets/x86/64/*.img.gz release/ 2>/dev/null || true
+          cp bin/targets/x86/64/*.img.gz release/
           cp bin/targets/x86/64/*.sha256sums release/ 2>/dev/null || true
 
       # 上传固件到 GitHub Release
