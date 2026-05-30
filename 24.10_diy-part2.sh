@@ -114,6 +114,17 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-set-password
 
+# 禁用不需要默认启动的服务（按需手动开启）
+cat > package/base-files/files/etc/uci-defaults/100-disable-services << 'EOF'
+#!/bin/sh
+/etc/init.d/ddns disable        2>/dev/null
+/etc/init.d/adblock disable      2>/dev/null
+/etc/init.d/frpc disable        2>/dev/null
+/etc/init.d/frps disable        2>/dev/null
+exit 0
+EOF
+chmod +x package/base-files/files/etc/uci-defaults/100-disable-services
+
 echo " uci-defaults已创建"
 
 # 自定义banner
