@@ -67,6 +67,13 @@ jobs:
           cd openwrt
           cp $GITHUB_WORKSPACE/24.10_config.txt .config
           make defconfig
+          # 强制恢复 i18n 包（defconfig 会错误丢弃）
+          grep "^CONFIG_PACKAGE_luci-i18n-.*-zh-cn=y" $GITHUB_WORKSPACE/24.10_config.txt 2>/dev/null | sed 's/^CONFIG_PACKAGE_//;s/=y$//' | while read pkg; do
+              if [ -n "$pkg" ]; then
+                  sed -i "s/# CONFIG_PACKAGE_${pkg} is not set/CONFIG_PACKAGE_${pkg}=y/" .config
+              fi
+          done
+          echo "i18n 中文包已恢复"
 
       - name: Download dependencies
         run: |
